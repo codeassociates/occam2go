@@ -1,0 +1,7 @@
+-- Parallel execution example
+SEQ
+  INT x, y:
+  PAR
+    x := 1
+    y := 2
+  x := x + y

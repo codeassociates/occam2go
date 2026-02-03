@@ -1,0 +1,202 @@
+package parser
+
+import (
+	"testing"
+
+	"github.com/codeassociates/occam2go/ast"
+	"github.com/codeassociates/occam2go/lexer"
+)
+
+func TestVarDecl(t *testing.T) {
+	input := `INT x:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.VarDecl)
+	if !ok {
+		t.Fatalf("expected VarDecl, got %T", program.Statements[0])
+	}
+
+	if decl.Type != "INT" {
+		t.Errorf("expected type INT, got %s", decl.Type)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "x" {
+		t.Errorf("expected name 'x', got %v", decl.Names)
+	}
+}
+
+func TestMultipleVarDecl(t *testing.T) {
+	input := `INT x, y, z:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.VarDecl)
+	if !ok {
+		t.Fatalf("expected VarDecl, got %T", program.Statements[0])
+	}
+
+	expected := []string{"x", "y", "z"}
+	if len(decl.Names) != len(expected) {
+		t.Fatalf("expected %d names, got %d", len(expected), len(decl.Names))
+	}
+	for i, name := range expected {
+		if decl.Names[i] != name {
+			t.Errorf("expected name %s at position %d, got %s", name, i, decl.Names[i])
+		}
+	}
+}
+
+func TestAssignment(t *testing.T) {
+	input := `x := 5
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assign.Name != "x" {
+		t.Errorf("expected name 'x', got %s", assign.Name)
+	}
+
+	intLit, ok := assign.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", assign.Value)
+	}
+
+	if intLit.Value != 5 {
+		t.Errorf("expected value 5, got %d", intLit.Value)
+	}
+}
+
+func TestBinaryExpression(t *testing.T) {
+	input := `x := a + b * c
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	// Should be: a + (b * c) due to precedence
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	if binExpr.Operator != "+" {
+		t.Errorf("expected +, got %s", binExpr.Operator)
+	}
+
+	// Right side should be b * c
+	rightBin, ok := binExpr.Right.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected right to be BinaryExpr, got %T", binExpr.Right)
+	}
+
+	if rightBin.Operator != "*" {
+		t.Errorf("expected *, got %s", rightBin.Operator)
+	}
+}
+
+func TestSeqBlock(t *testing.T) {
+	input := `SEQ
+  INT x:
+  x := 10
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	seq, ok := program.Statements[0].(*ast.SeqBlock)
+	if !ok {
+		t.Fatalf("expected SeqBlock, got %T", program.Statements[0])
+	}
+
+	if len(seq.Statements) != 2 {
+		t.Fatalf("expected 2 statements in SEQ, got %d", len(seq.Statements))
+	}
+
+	_, ok = seq.Statements[0].(*ast.VarDecl)
+	if !ok {
+		t.Errorf("expected first statement to be VarDecl, got %T", seq.Statements[0])
+	}
+
+	_, ok = seq.Statements[1].(*ast.Assignment)
+	if !ok {
+		t.Errorf("expected second statement to be Assignment, got %T", seq.Statements[1])
+	}
+}
+
+func TestParBlock(t *testing.T) {
+	input := `PAR
+  x := 1
+  y := 2
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	par, ok := program.Statements[0].(*ast.ParBlock)
+	if !ok {
+		t.Fatalf("expected ParBlock, got %T", program.Statements[0])
+	}
+
+	if len(par.Statements) != 2 {
+		t.Fatalf("expected 2 statements in PAR, got %d", len(par.Statements))
+	}
+}
+
+func checkParserErrors(t *testing.T, p *Parser) {
+	errors := p.Errors()
+	if len(errors) == 0 {
+		return
+	}
+
+	t.Errorf("parser has %d errors:", len(errors))
+	for _, msg := range errors {
+		t.Errorf("  parser error: %s", msg)
+	}
+	t.FailNow()
+}

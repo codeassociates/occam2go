@@ -1,0 +1,6 @@
+-- A simple Occam program
+SEQ
+  INT x, y:
+  x := 10
+  y := 20
+  x := x + y
