@@ -94,6 +94,25 @@ func main() {
 | Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=` | `==`, `!=`, `<`, `>`, `<=`, `>=` |
 | Logic: `AND`, `OR`, `NOT` | `&&`, `\|\|`, `!` |
 
+### Channels
+
+| Occam | Go |
+|-------|-----|
+| `CHAN OF INT c:` | `c := make(chan int)` |
+| `c ! x` (send) | `c <- x` |
+| `c ? y` (receive) | `y = <-c` |
+
+Example:
+```occam
+SEQ
+  CHAN OF INT c:
+  INT result:
+  PAR
+    c ! 42
+    c ? result
+  print.int(result)
+```
+
 ### Built-in I/O Procedures
 
 | Occam | Go |
@@ -105,7 +124,6 @@ func main() {
 
 ## Not Yet Implemented
 
-- Channels (`CHAN`, `!`, `?`)
 - `ALT` (alternation) → `select`
 - Replicators (`PAR i = 0 FOR n`)
 - Arrays

@@ -135,6 +135,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
 		return p.parseVarDecl()
+	case lexer.CHAN:
+		return p.parseChanDecl()
 	case lexer.SEQ:
 		return p.parseSeqBlock()
 	case lexer.PAR:
@@ -148,9 +150,15 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.IF:
 		return p.parseIfStatement()
 	case lexer.IDENT:
-		// Could be assignment or procedure call
+		// Could be assignment, send, receive, or procedure call
 		if p.peekTokenIs(lexer.ASSIGN) {
 			return p.parseAssignment()
+		}
+		if p.peekTokenIs(lexer.SEND) {
+			return p.parseSend()
+		}
+		if p.peekTokenIs(lexer.RECEIVE) {
+			return p.parseReceive()
 		}
 		return p.parseProcCall()
 	case lexer.INDENT, lexer.DEDENT, lexer.EOF:
@@ -198,6 +206,74 @@ func (p *Parser) parseAssignment() *ast.Assignment {
 
 	p.nextToken() // move past :=
 	stmt.Value = p.parseExpression(LOWEST)
+
+	return stmt
+}
+
+func (p *Parser) parseChanDecl() *ast.ChanDecl {
+	decl := &ast.ChanDecl{Token: p.curToken}
+
+	// Expect OF
+	if !p.expectPeek(lexer.OF) {
+		return nil
+	}
+
+	// Expect type (INT, BYTE, BOOL, etc.)
+	p.nextToken()
+	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+		p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+		return nil
+	}
+	decl.ElemType = p.curToken.Literal
+
+	// Parse channel names
+	for {
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		decl.Names = append(decl.Names, p.curToken.Literal)
+
+		if p.peekTokenIs(lexer.COMMA) {
+			p.nextToken() // consume comma
+		} else {
+			break
+		}
+	}
+
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return decl
+}
+
+func (p *Parser) parseSend() *ast.Send {
+	stmt := &ast.Send{
+		Channel: p.curToken.Literal,
+	}
+
+	p.nextToken() // move to !
+	stmt.Token = p.curToken
+
+	p.nextToken() // move past !
+	stmt.Value = p.parseExpression(LOWEST)
+
+	return stmt
+}
+
+func (p *Parser) parseReceive() *ast.Receive {
+	stmt := &ast.Receive{
+		Channel: p.curToken.Literal,
+	}
+
+	p.nextToken() // move to ?
+	stmt.Token = p.curToken
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	stmt.Variable = p.curToken.Literal
 
 	return stmt
 }
@@ -254,11 +330,28 @@ func (p *Parser) parseBlockStatements() []ast.Statement {
 			p.nextToken()
 		}
 
-		// Stop if we've dedented below the block's level
-		if p.indentLevel < startLevel {
+		// Handle DEDENT tokens
+		// If we're at a DEDENT and indentLevel has dropped below startLevel,
+		// this DEDENT ends our block - stop parsing
+		// If indentLevel >= startLevel, this DEDENT is from a nested block - skip it
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return statements
+			}
+			p.nextToken() // skip nested block's DEDENT
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
 			break
 		}
-		if p.curTokenIs(lexer.DEDENT) || p.curTokenIs(lexer.EOF) {
+
+		// Double-check we haven't gone below our level
+		if p.indentLevel < startLevel {
 			break
 		}
 

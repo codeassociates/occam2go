@@ -206,3 +206,61 @@ func TestE2E_ComplexExpression(t *testing.T) {
 		t.Errorf("expected 28, got %q", output)
 	}
 }
+
+func TestE2E_Channel(t *testing.T) {
+	// Test basic channel communication between parallel processes
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  PAR
+    c ! 42
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChannelExpression(t *testing.T) {
+	// Test sending an expression over a channel
+	occam := `SEQ
+  CHAN OF INT c:
+  INT x, result:
+  x := 10
+  PAR
+    c ! x * 2
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChannelPingPong(t *testing.T) {
+	// Test two-way communication: send a value, double it, send back
+	occam := `SEQ
+  CHAN OF INT request:
+  CHAN OF INT response:
+  INT result:
+  PAR
+    SEQ
+      request ! 21
+      response ? result
+    SEQ
+      INT x:
+      request ? x
+      response ! x * 2
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

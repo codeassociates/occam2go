@@ -184,8 +184,14 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.VarDecl:
 		g.generateVarDecl(s)
+	case *ast.ChanDecl:
+		g.generateChanDecl(s)
 	case *ast.Assignment:
 		g.generateAssignment(s)
+	case *ast.Send:
+		g.generateSend(s)
+	case *ast.Receive:
+		g.generateReceive(s)
 	case *ast.SeqBlock:
 		g.generateSeqBlock(s)
 	case *ast.ParBlock:
@@ -206,6 +212,25 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 	goType := g.occamTypeToGo(decl.Type)
 	g.writeLine(fmt.Sprintf("var %s %s", strings.Join(decl.Names, ", "), goType))
+}
+
+func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
+	goType := g.occamTypeToGo(decl.ElemType)
+	for _, name := range decl.Names {
+		g.writeLine(fmt.Sprintf("%s := make(chan %s)", name, goType))
+	}
+}
+
+func (g *Generator) generateSend(send *ast.Send) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write(send.Channel)
+	g.write(" <- ")
+	g.generateExpression(send.Value)
+	g.write("\n")
+}
+
+func (g *Generator) generateReceive(recv *ast.Receive) {
+	g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, recv.Channel))
 }
 
 func (g *Generator) occamTypeToGo(occamType string) string {

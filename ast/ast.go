@@ -189,3 +189,33 @@ type ParenExpr struct {
 
 func (pe *ParenExpr) expressionNode()      {}
 func (pe *ParenExpr) TokenLiteral() string { return pe.Token.Literal }
+
+// ChanDecl represents a channel declaration: CHAN OF INT c:
+type ChanDecl struct {
+	Token    lexer.Token // the CHAN token
+	ElemType string      // the element type (INT, BYTE, etc.)
+	Names    []string    // channel names
+}
+
+func (c *ChanDecl) statementNode()       {}
+func (c *ChanDecl) TokenLiteral() string { return c.Token.Literal }
+
+// Send represents a channel send: c ! x
+type Send struct {
+	Token   lexer.Token // the ! token
+	Channel string      // channel name
+	Value   Expression  // value to send
+}
+
+func (s *Send) statementNode()       {}
+func (s *Send) TokenLiteral() string { return s.Token.Literal }
+
+// Receive represents a channel receive: c ? x
+type Receive struct {
+	Token    lexer.Token // the ? token
+	Channel  string      // channel name
+	Variable string      // variable to receive into
+}
+
+func (r *Receive) statementNode()       {}
+func (r *Receive) TokenLiteral() string { return r.Token.Literal }

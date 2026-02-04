@@ -188,6 +188,89 @@ func TestParBlock(t *testing.T) {
 	}
 }
 
+func TestChanDecl(t *testing.T) {
+	input := `CHAN OF INT c:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
+	}
+
+	if decl.ElemType != "INT" {
+		t.Errorf("expected element type INT, got %s", decl.ElemType)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "c" {
+		t.Errorf("expected name 'c', got %v", decl.Names)
+	}
+}
+
+func TestSend(t *testing.T) {
+	input := `c ! 42
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	send, ok := program.Statements[0].(*ast.Send)
+	if !ok {
+		t.Fatalf("expected Send, got %T", program.Statements[0])
+	}
+
+	if send.Channel != "c" {
+		t.Errorf("expected channel 'c', got %s", send.Channel)
+	}
+
+	intLit, ok := send.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", send.Value)
+	}
+
+	if intLit.Value != 42 {
+		t.Errorf("expected value 42, got %d", intLit.Value)
+	}
+}
+
+func TestReceive(t *testing.T) {
+	input := `c ? x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "c" {
+		t.Errorf("expected channel 'c', got %s", recv.Channel)
+	}
+
+	if recv.Variable != "x" {
+		t.Errorf("expected variable 'x', got %s", recv.Variable)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

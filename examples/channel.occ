@@ -1,0 +1,8 @@
+-- Channel communication example
+SEQ
+  CHAN OF INT c:
+  INT result:
+  PAR
+    c ! 42
+    c ? result
+  print.int(result)
