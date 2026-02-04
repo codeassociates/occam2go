@@ -20,6 +20,30 @@ Options:
 - `-o <file>` - Write output to file (default: stdout)
 - `-version` - Print version and exit
 
+## Running an Example
+
+Here's how to transpile, compile, and run an Occam program:
+
+```bash
+# 1. Build the transpiler (only needed once)
+go build -o occam2go
+
+# 2. Transpile an Occam file to Go
+./occam2go examples/print.occ -o output.go
+
+# 3. Compile the generated Go code
+go build -o output output.go
+
+# 4. Run the compiled program
+./output
+```
+
+Or as a one-liner to see the output immediately:
+
+```bash
+./occam2go examples/print.occ -o output.go && go run output.go
+```
+
 ## Example
 
 Input (`example.occ`):
