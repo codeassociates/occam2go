@@ -12,11 +12,20 @@ type Generator struct {
 	indent   int
 	builder  strings.Builder
 	needSync bool // track if we need sync package import
+	needFmt  bool // track if we need fmt package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
 	// Track current procedure's reference parameters
 	refParams map[string]bool
+}
+
+// Built-in print procedures
+var printBuiltins = map[string]bool{
+	"print.int":     true,
+	"print.string":  true,
+	"print.bool":    true,
+	"print.newline": true,
 }
 
 // New creates a new code generator
@@ -28,13 +37,17 @@ func New() *Generator {
 func (g *Generator) Generate(program *ast.Program) string {
 	g.builder.Reset()
 	g.needSync = false
+	g.needFmt = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 
-	// First pass: collect procedure signatures and check for PAR
+	// First pass: collect procedure signatures and check for PAR/print
 	for _, stmt := range program.Statements {
 		if g.containsPar(stmt) {
 			g.needSync = true
+		}
+		if g.containsPrint(stmt) {
+			g.needFmt = true
 		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
@@ -46,10 +59,15 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync {
+	if g.needSync || g.needFmt {
 		g.writeLine("import (")
 		g.indent++
-		g.writeLine(`"sync"`)
+		if g.needFmt {
+			g.writeLine(`"fmt"`)
+		}
+		if g.needSync {
+			g.writeLine(`"sync"`)
+		}
 		g.indent--
 		g.writeLine(")")
 		g.writeLine("")
@@ -107,6 +125,40 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
 			if choice.Body != nil && g.containsPar(choice.Body) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (g *Generator) containsPrint(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.ProcCall:
+		return printBuiltins[s.Name]
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsPrint(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsPrint(inner) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		if s.Body != nil && g.containsPrint(s.Body) {
+			return true
+		}
+	case *ast.WhileLoop:
+		if s.Body != nil && g.containsPrint(s.Body) {
+			return true
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsPrint(choice.Body) {
 				return true
 			}
 		}
@@ -248,6 +300,12 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 }
 
 func (g *Generator) generateProcCall(call *ast.ProcCall) {
+	// Handle built-in print procedures
+	if printBuiltins[call.Name] {
+		g.generatePrintCall(call)
+		return
+	}
+
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(call.Name)
 	g.write("(")
@@ -266,6 +324,23 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 		g.generateExpression(arg)
 	}
 	g.write(")")
+	g.write("\n")
+}
+
+func (g *Generator) generatePrintCall(call *ast.ProcCall) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+
+	switch call.Name {
+	case "print.int", "print.string", "print.bool":
+		g.write("fmt.Println(")
+		if len(call.Args) > 0 {
+			g.generateExpression(call.Args[0])
+		}
+		g.write(")")
+	case "print.newline":
+		g.write("fmt.Println()")
+	}
+
 	g.write("\n")
 }
 

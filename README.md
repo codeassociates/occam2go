@@ -70,6 +70,15 @@ func main() {
 | Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=` | `==`, `!=`, `<`, `>`, `<=`, `>=` |
 | Logic: `AND`, `OR`, `NOT` | `&&`, `\|\|`, `!` |
 
+### Built-in I/O Procedures
+
+| Occam | Go |
+|-------|-----|
+| `print.int(x)` | `fmt.Println(x)` |
+| `print.bool(x)` | `fmt.Println(x)` |
+| `print.string(x)` | `fmt.Println(x)` |
+| `print.newline()` | `fmt.Println()` |
+
 ## Not Yet Implemented
 
 - Channels (`CHAN`, `!`, `?`)
