@@ -86,7 +86,3 @@ func main() {
 - Replicators (`PAR i = 0 FOR n`)
 - Arrays
 - `WHILE`, `IF` (partial)
-
-## License
-
-MIT
