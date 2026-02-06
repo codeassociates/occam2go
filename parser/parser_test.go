@@ -349,6 +349,33 @@ func TestAltBlockWithGuard(t *testing.T) {
 	}
 }
 
+func TestWhileLoop(t *testing.T) {
+	input := `WHILE x > 0
+  x := x - 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	loop, ok := program.Statements[0].(*ast.WhileLoop)
+	if !ok {
+		t.Fatalf("expected WhileLoop, got %T", program.Statements[0])
+	}
+
+	if loop.Condition == nil {
+		t.Error("expected condition")
+	}
+
+	if loop.Body == nil {
+		t.Error("expected body")
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

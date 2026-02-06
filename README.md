@@ -88,6 +88,7 @@ func main() {
 | `INT`, `BYTE`, `BOOL`, `REAL` | `int`, `byte`, `bool`, `float64` |
 | `SEQ` | Sequential code |
 | `PAR` | Goroutines with `sync.WaitGroup` |
+| `WHILE` | `for` loop |
 | `PROC` with `VAL` params | Functions with value/pointer params |
 | `:=` assignment | `=` assignment |
 | Arithmetic: `+`, `-`, `*`, `/`, `\` | `+`, `-`, `*`, `/`, `%` |
@@ -159,9 +160,9 @@ ALT
 
 ## Not Yet Implemented
 
-- Replicators (`PAR i = 0 FOR n`)
+- Replicators (`PAR i = 0 FOR n`, `SEQ i = 0 FOR n`)
+- `IF` (guarded commands)
 - Arrays
-- `WHILE`, `IF` (partial)
 
 ## How Channels are Mapped
 

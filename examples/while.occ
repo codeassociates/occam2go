@@ -1,0 +1,8 @@
+-- WHILE loop example
+SEQ
+  INT x:
+  x := 5
+  WHILE x > 0
+    SEQ
+      print.int(x)
+      x := x - 1

@@ -326,3 +326,61 @@ func TestE2E_AltWithBody(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_WhileBasic(t *testing.T) {
+	// Test basic WHILE loop
+	occam := `SEQ
+  INT x:
+  x := 3
+  WHILE x > 0
+    SEQ
+      print.int(x)
+      x := x - 1
+`
+	output := transpileCompileRun(t, occam)
+	expected := "3\n2\n1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_WhileSum(t *testing.T) {
+	// Test WHILE loop computing a sum
+	occam := `SEQ
+  INT i, sum:
+  i := 1
+  sum := 0
+  WHILE i <= 5
+    SEQ
+      sum := sum + i
+      i := i + 1
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_WhileNested(t *testing.T) {
+	// Test nested WHILE loops (multiplication table style)
+	occam := `SEQ
+  INT i, j, product:
+  i := 1
+  WHILE i <= 2
+    SEQ
+      j := 1
+      WHILE j <= 2
+        SEQ
+          product := i * j
+          print.int(product)
+          j := j + 1
+      i := i + 1
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n2\n2\n4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
