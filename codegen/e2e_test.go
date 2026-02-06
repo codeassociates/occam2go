@@ -264,3 +264,65 @@ func TestE2E_ChannelPingPong(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_AltBasic(t *testing.T) {
+	// Test basic ALT: select from first ready channel
+	occam := `SEQ
+  CHAN OF INT c1:
+  CHAN OF INT c2:
+  INT result:
+  PAR
+    c1 ! 42
+    ALT
+      c1 ? result
+        print.int(result)
+      c2 ? result
+        print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AltSecondChannel(t *testing.T) {
+	// Test ALT selecting from second channel
+	occam := `SEQ
+  CHAN OF INT c1:
+  CHAN OF INT c2:
+  INT result:
+  PAR
+    c2 ! 99
+    ALT
+      c1 ? result
+        print.int(result)
+      c2 ? result
+        print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AltWithBody(t *testing.T) {
+	// Test ALT with computation in body
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  PAR
+    c ! 10
+    ALT
+      c ? result
+        SEQ
+          result := result * 2
+          print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

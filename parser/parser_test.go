@@ -271,6 +271,84 @@ func TestReceive(t *testing.T) {
 	}
 }
 
+func TestAltBlock(t *testing.T) {
+	input := `ALT
+  c1 ? x
+    SKIP
+  c2 ? y
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if len(alt.Cases) != 2 {
+		t.Fatalf("expected 2 cases, got %d", len(alt.Cases))
+	}
+
+	if alt.Cases[0].Channel != "c1" {
+		t.Errorf("expected channel 'c1', got %s", alt.Cases[0].Channel)
+	}
+
+	if alt.Cases[0].Variable != "x" {
+		t.Errorf("expected variable 'x', got %s", alt.Cases[0].Variable)
+	}
+
+	if alt.Cases[1].Channel != "c2" {
+		t.Errorf("expected channel 'c2', got %s", alt.Cases[1].Channel)
+	}
+
+	if alt.Cases[1].Variable != "y" {
+		t.Errorf("expected variable 'y', got %s", alt.Cases[1].Variable)
+	}
+}
+
+func TestAltBlockWithGuard(t *testing.T) {
+	input := `ALT
+  TRUE & c1 ? x
+    SKIP
+  FALSE & c2 ? y
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if len(alt.Cases) != 2 {
+		t.Fatalf("expected 2 cases, got %d", len(alt.Cases))
+	}
+
+	// First case should have TRUE guard
+	if alt.Cases[0].Guard == nil {
+		t.Error("expected guard on first case")
+	}
+
+	// Second case should have FALSE guard
+	if alt.Cases[1].Guard == nil {
+		t.Error("expected guard on second case")
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

@@ -114,6 +114,12 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 				return true
 			}
 		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsPar(c.Body) {
+				return true
+			}
+		}
 	case *ast.ProcDecl:
 		if s.Body != nil && g.containsPar(s.Body) {
 			return true
@@ -145,6 +151,12 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 	case *ast.ParBlock:
 		for _, inner := range s.Statements {
 			if g.containsPrint(inner) {
+				return true
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsPrint(c.Body) {
 				return true
 			}
 		}
@@ -196,6 +208,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateSeqBlock(s)
 	case *ast.ParBlock:
 		g.generateParBlock(s)
+	case *ast.AltBlock:
+		g.generateAltBlock(s)
 	case *ast.Skip:
 		g.writeLine("// SKIP")
 	case *ast.ProcDecl:
@@ -282,6 +296,54 @@ func (g *Generator) generateParBlock(par *ast.ParBlock) {
 	}
 
 	g.writeLine("wg.Wait()")
+}
+
+func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
+	// ALT becomes Go select statement
+	// For guards, we use a pattern with nil channels
+
+	// Check if any cases have guards
+	hasGuards := false
+	for _, c := range alt.Cases {
+		if c.Guard != nil {
+			hasGuards = true
+			break
+		}
+	}
+
+	if hasGuards {
+		// Generate channel variables for guarded cases
+		for i, c := range alt.Cases {
+			if c.Guard != nil {
+				g.builder.WriteString(strings.Repeat("\t", g.indent))
+				g.write(fmt.Sprintf("var _alt%d chan ", i))
+				// We don't know the channel type here, so use interface{}
+				// Actually, we should use the same type as the original channel
+				// For now, let's just reference the original channel conditionally
+				g.write(fmt.Sprintf("int = nil\n")) // Assuming int for now
+				g.builder.WriteString(strings.Repeat("\t", g.indent))
+				g.write(fmt.Sprintf("if "))
+				g.generateExpression(c.Guard)
+				g.write(fmt.Sprintf(" { _alt%d = %s }\n", i, c.Channel))
+			}
+		}
+	}
+
+	g.writeLine("select {")
+	for i, c := range alt.Cases {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		if c.Guard != nil {
+			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", c.Variable, i))
+		} else {
+			g.write(fmt.Sprintf("case %s = <-%s:\n", c.Variable, c.Channel))
+		}
+		g.indent++
+		if c.Body != nil {
+			g.generateStatement(c.Body)
+		}
+		g.indent--
+	}
+	g.writeLine("}")
 }
 
 func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {

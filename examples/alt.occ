@@ -1,0 +1,12 @@
+-- ALT example: select from multiple channels
+SEQ
+  CHAN OF INT c1:
+  CHAN OF INT c2:
+  INT result:
+  PAR
+    c1 ! 42
+    ALT
+      c1 ? result
+        print.int(result)
+      c2 ? result
+        print.int(result)

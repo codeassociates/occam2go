@@ -28,8 +28,9 @@ const (
 	GT       // >
 	LE       // <=
 	GE       // >=
-	SEND     // !
-	RECEIVE  // ?
+	SEND      // !
+	RECEIVE   // ?
+	AMPERSAND // & (guard separator in ALT)
 
 	// Delimiters
 	LPAREN    // (
@@ -90,8 +91,9 @@ var tokenNames = map[TokenType]string{
 	GT:       ">",
 	LE:       "<=",
 	GE:       ">=",
-	SEND:     "!",
-	RECEIVE:  "?",
+	SEND:      "!",
+	RECEIVE:   "?",
+	AMPERSAND: "&",
 
 	LPAREN:    "(",
 	RPAREN:    ")",

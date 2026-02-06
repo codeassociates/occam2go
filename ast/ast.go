@@ -219,3 +219,20 @@ type Receive struct {
 
 func (r *Receive) statementNode()       {}
 func (r *Receive) TokenLiteral() string { return r.Token.Literal }
+
+// AltBlock represents an ALT block (alternation/select)
+type AltBlock struct {
+	Token lexer.Token // the ALT token
+	Cases []AltCase
+}
+
+func (a *AltBlock) statementNode()       {}
+func (a *AltBlock) TokenLiteral() string { return a.Token.Literal }
+
+// AltCase represents a single case in an ALT block
+type AltCase struct {
+	Guard    Expression // optional guard condition (nil if no guard)
+	Channel  string     // channel name
+	Variable string     // variable to receive into
+	Body     Statement  // the body to execute
+}

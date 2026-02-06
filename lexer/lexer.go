@@ -112,6 +112,8 @@ func (l *Lexer) NextToken() Token {
 		tok = l.newToken(SEND, l.ch)
 	case '?':
 		tok = l.newToken(RECEIVE, l.ch)
+	case '&':
+		tok = l.newToken(AMPERSAND, l.ch)
 	case ':':
 		if l.peekChar() == '=' {
 			ch := l.ch

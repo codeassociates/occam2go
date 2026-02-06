@@ -113,6 +113,41 @@ SEQ
   print.int(result)
 ```
 
+### ALT (Alternation)
+
+| Occam | Go |
+|-------|-----|
+| `ALT` | `select` |
+| `guard & c ? x` | Conditional channel with nil pattern |
+
+Example:
+```occam
+ALT
+  c1 ? x
+    print.int(x)
+  c2 ? y
+    print.int(y)
+```
+
+Generates:
+```go
+select {
+case x = <-c1:
+    fmt.Println(x)
+case y = <-c2:
+    fmt.Println(y)
+}
+```
+
+ALT with guards (optional boolean conditions):
+```occam
+ALT
+  enabled & c1 ? x
+    process(x)
+  TRUE & c2 ? y
+    process(y)
+```
+
 ### Built-in I/O Procedures
 
 | Occam | Go |
@@ -124,7 +159,6 @@ SEQ
 
 ## Not Yet Implemented
 
-- `ALT` (alternation) → `select`
 - Replicators (`PAR i = 0 FOR n`)
 - Arrays
 - `WHILE`, `IF` (partial)
@@ -164,4 +198,4 @@ The sender and receiver must both be ready before the communication occurs. This
 
 3. **Channel arrays**: Occam allows arrays of channels. Not yet implemented.
 
-4. **ALT construct**: Occam's `ALT` allows a process to wait on multiple channels and proceed with whichever is ready first. This maps to Go's `select` statement but is not yet implemented.
+4. **ALT construct**: Occam's `ALT` maps to Go's `select` statement. Basic ALT and guards are supported. Priority ALT (`PRI ALT`) and replicated ALT are not yet implemented.

@@ -141,6 +141,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseSeqBlock()
 	case lexer.PAR:
 		return p.parseParBlock()
+	case lexer.ALT:
+		return p.parseAltBlock()
 	case lexer.SKIP:
 		return &ast.Skip{Token: p.curToken}
 	case lexer.PROC:
@@ -316,6 +318,148 @@ func (p *Parser) parseParBlock() *ast.ParBlock {
 	block.Statements = p.parseBlockStatements()
 
 	return block
+}
+
+func (p *Parser) parseAltBlock() *ast.AltBlock {
+	block := &ast.AltBlock{Token: p.curToken}
+
+	// Skip to next line
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after ALT")
+		return block
+	}
+	p.nextToken() // consume INDENT
+
+	block.Cases = p.parseAltCases()
+
+	return block
+}
+
+func (p *Parser) parseAltCases() []ast.AltCase {
+	var cases []ast.AltCase
+	startLevel := p.indentLevel
+
+	p.nextToken() // move past INDENT
+
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return cases
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		// Parse an ALT case: [guard &] channel ? var
+		altCase := p.parseAltCase()
+		if altCase != nil {
+			cases = append(cases, *altCase)
+		}
+	}
+
+	return cases
+}
+
+func (p *Parser) parseAltCase() *ast.AltCase {
+	altCase := &ast.AltCase{}
+
+	// Check for guard: expression & channel ? var
+	// For now, we expect: channel ? var (no guard support yet)
+	// or: guard & channel ? var
+
+	// First token should be identifier (channel name or guard start)
+	if !p.curTokenIs(lexer.IDENT) && !p.curTokenIs(lexer.TRUE) && !p.curTokenIs(lexer.FALSE) {
+		p.addError(fmt.Sprintf("expected channel name or guard in ALT case, got %s", p.curToken.Type))
+		return nil
+	}
+
+	// Look ahead to determine if this is a guard or channel
+	// If next token is & then we have a guard
+	// If next token is ? then it's a channel receive
+	if p.peekTokenIs(lexer.RECEIVE) {
+		// Simple case: channel ? var
+		altCase.Channel = p.curToken.Literal
+		p.nextToken() // move to ?
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		altCase.Variable = p.curToken.Literal
+	} else {
+		// Could be a guard followed by & channel ? var
+		// For simplicity, parse expression until we hit &
+		// For now, only support simple TRUE/FALSE or identifier guards
+		guard := p.parseExpression(LOWEST)
+		altCase.Guard = guard
+
+		// Expect &
+		if !p.peekTokenIs(lexer.AMPERSAND) {
+			p.addError("expected & after guard in ALT case")
+			return nil
+		}
+		p.nextToken() // move to &
+		p.nextToken() // move past &
+
+		// Now expect channel ? var
+		if !p.curTokenIs(lexer.IDENT) {
+			p.addError(fmt.Sprintf("expected channel name after guard, got %s", p.curToken.Type))
+			return nil
+		}
+		altCase.Channel = p.curToken.Literal
+
+		if !p.expectPeek(lexer.RECEIVE) {
+			return nil
+		}
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		altCase.Variable = p.curToken.Literal
+	}
+
+	// Skip to next line for the body
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT for body
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented body after ALT case")
+		return altCase
+	}
+	p.nextToken() // consume INDENT
+	p.nextToken() // move into body
+
+	// Parse the body (first statement)
+	altCase.Body = p.parseStatement()
+
+	// Skip to end of body block
+	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+		p.nextToken()
+	}
+
+	return altCase
 }
 
 func (p *Parser) parseBlockStatements() []ast.Statement {
