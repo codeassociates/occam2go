@@ -43,10 +43,22 @@ type VarDecl struct {
 func (v *VarDecl) statementNode()       {}
 func (v *VarDecl) TokenLiteral() string { return v.Token.Literal }
 
-// Assignment represents an assignment: x := 5
+// ArrayDecl represents an array declaration: [5]INT arr:
+type ArrayDecl struct {
+	Token lexer.Token // the [ token
+	Size  Expression  // array size
+	Type  string      // element type ("INT", "BYTE", "BOOL", etc.)
+	Names []string    // variable names
+}
+
+func (a *ArrayDecl) statementNode()       {}
+func (a *ArrayDecl) TokenLiteral() string { return a.Token.Literal }
+
+// Assignment represents an assignment: x := 5 or arr[i] := 5
 type Assignment struct {
 	Token lexer.Token // the := token
 	Name  string      // variable name
+	Index Expression  // optional: index expression for arr[i] := x (nil for simple assignments)
 	Value Expression  // the value being assigned
 }
 
@@ -200,6 +212,16 @@ type ParenExpr struct {
 
 func (pe *ParenExpr) expressionNode()      {}
 func (pe *ParenExpr) TokenLiteral() string { return pe.Token.Literal }
+
+// IndexExpr represents an array index expression: arr[i]
+type IndexExpr struct {
+	Token lexer.Token // the [ token
+	Left  Expression  // the array expression
+	Index Expression  // the index expression
+}
+
+func (ie *IndexExpr) expressionNode()      {}
+func (ie *IndexExpr) TokenLiteral() string { return ie.Token.Literal }
 
 // ChanDecl represents a channel declaration: CHAN OF INT c:
 type ChanDecl struct {

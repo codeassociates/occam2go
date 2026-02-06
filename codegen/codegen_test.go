@@ -143,6 +143,26 @@ func TestIfStatement(t *testing.T) {
 	}
 }
 
+func TestArrayDecl(t *testing.T) {
+	input := `[5]INT arr:
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "arr := make([]int, 5)") {
+		t.Errorf("expected 'arr := make([]int, 5)' in output, got:\n%s", output)
+	}
+}
+
+func TestIndexedAssignment(t *testing.T) {
+	input := `arr[2] := 10
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "arr[2] = 10") {
+		t.Errorf("expected 'arr[2] = 10' in output, got:\n%s", output)
+	}
+}
+
 func transpile(t *testing.T, input string) string {
 	t.Helper()
 

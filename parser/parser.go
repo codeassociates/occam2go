@@ -19,6 +19,7 @@ const (
 	SUM          // +, -
 	PRODUCT      // *, /, \
 	PREFIX       // -x, NOT x
+	INDEX        // arr[i]
 )
 
 var precedences = map[lexer.TokenType]int{
@@ -35,6 +36,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.MULTIPLY: PRODUCT,
 	lexer.DIVIDE:   PRODUCT,
 	lexer.MODULO:   PRODUCT,
+	lexer.LBRACKET: INDEX,
 }
 
 type Parser struct {
@@ -135,6 +137,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
 		return p.parseVarDecl()
+	case lexer.LBRACKET:
+		return p.parseArrayDecl()
 	case lexer.CHAN:
 		return p.parseChanDecl()
 	case lexer.SEQ:
@@ -152,7 +156,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.IF:
 		return p.parseIfStatement()
 	case lexer.IDENT:
-		// Could be assignment, send, receive, or procedure call
+		// Could be assignment, indexed assignment, send, receive, or procedure call
+		if p.peekTokenIs(lexer.LBRACKET) {
+			return p.parseIndexedAssignment()
+		}
 		if p.peekTokenIs(lexer.ASSIGN) {
 			return p.parseAssignment()
 		}
@@ -210,6 +217,90 @@ func (p *Parser) parseAssignment() *ast.Assignment {
 	stmt.Value = p.parseExpression(LOWEST)
 
 	return stmt
+}
+
+func (p *Parser) parseArrayDecl() *ast.ArrayDecl {
+	decl := &ast.ArrayDecl{Token: p.curToken}
+
+	// Parse size expression after [
+	p.nextToken()
+	decl.Size = p.parseExpression(LOWEST)
+
+	// Expect ]
+	if !p.expectPeek(lexer.RBRACKET) {
+		return nil
+	}
+
+	// Expect type (INT, BYTE, BOOL, REAL)
+	p.nextToken()
+	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+		p.addError(fmt.Sprintf("expected type after array size, got %s", p.curToken.Type))
+		return nil
+	}
+	decl.Type = p.curToken.Literal
+
+	// Parse variable names
+	for {
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		decl.Names = append(decl.Names, p.curToken.Literal)
+
+		if p.peekTokenIs(lexer.COMMA) {
+			p.nextToken() // consume comma
+		} else {
+			break
+		}
+	}
+
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return decl
+}
+
+func (p *Parser) parseIndexedAssignment() *ast.Assignment {
+	stmt := &ast.Assignment{
+		Name: p.curToken.Literal,
+	}
+
+	p.nextToken() // move to [
+	p.nextToken() // move past [
+	stmt.Index = p.parseExpression(LOWEST)
+
+	// Expect ]
+	if !p.expectPeek(lexer.RBRACKET) {
+		return nil
+	}
+
+	// Expect :=
+	if !p.expectPeek(lexer.ASSIGN) {
+		return nil
+	}
+	stmt.Token = p.curToken
+
+	p.nextToken() // move past :=
+	stmt.Value = p.parseExpression(LOWEST)
+
+	return stmt
+}
+
+func (p *Parser) parseIndexExpression(left ast.Expression) *ast.IndexExpr {
+	expr := &ast.IndexExpr{
+		Token: p.curToken,
+		Left:  left,
+	}
+
+	p.nextToken() // move past [
+	expr.Index = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.RBRACKET) {
+		return nil
+	}
+
+	return expr
 }
 
 func (p *Parser) parseChanDecl() *ast.ChanDecl {
@@ -832,6 +923,9 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			lexer.AND, lexer.OR:
 			p.nextToken()
 			left = p.parseBinaryExpr(left)
+		case lexer.LBRACKET:
+			p.nextToken()
+			left = p.parseIndexExpression(left)
 		default:
 			return left
 		}

@@ -196,6 +196,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.VarDecl:
 		g.generateVarDecl(s)
+	case *ast.ArrayDecl:
+		g.generateArrayDecl(s)
 	case *ast.ChanDecl:
 		g.generateChanDecl(s)
 	case *ast.Assignment:
@@ -235,6 +237,16 @@ func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	}
 }
 
+func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
+	goType := g.occamTypeToGo(decl.Type)
+	for _, name := range decl.Names {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s := make([]%s, ", name, goType))
+		g.generateExpression(decl.Size)
+		g.write(")\n")
+	}
+}
+
 func (g *Generator) generateSend(send *ast.Send) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(send.Channel)
@@ -269,6 +281,11 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 		g.write("*")
 	}
 	g.write(assign.Name)
+	if assign.Index != nil {
+		g.write("[")
+		g.generateExpression(assign.Index)
+		g.write("]")
+	}
 	g.write(" = ")
 	g.generateExpression(assign.Value)
 	g.write("\n")
@@ -539,6 +556,11 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write("(")
 		g.generateExpression(e.Expr)
 		g.write(")")
+	case *ast.IndexExpr:
+		g.generateExpression(e.Left)
+		g.write("[")
+		g.generateExpression(e.Index)
+		g.write("]")
 	}
 }
 

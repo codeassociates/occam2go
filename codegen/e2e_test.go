@@ -554,3 +554,73 @@ func TestE2E_ReplicatedPar(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ArrayBasic(t *testing.T) {
+	// Test basic array: declare, store, load
+	occam := `SEQ
+  [5]INT arr:
+  arr[0] := 42
+  print.int(arr[0])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ArrayWithLoop(t *testing.T) {
+	// Test filling array with replicated SEQ and printing all elements
+	occam := `SEQ
+  [5]INT arr:
+  SEQ i = 0 FOR 5
+    arr[i] := i * 10
+  SEQ i = 0 FOR 5
+    print.int(arr[i])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n10\n20\n30\n40\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ArraySum(t *testing.T) {
+	// Test computing sum of array elements
+	occam := `SEQ
+  [4]INT arr:
+  arr[0] := 10
+  arr[1] := 20
+  arr[2] := 30
+  arr[3] := 40
+  INT sum:
+  sum := 0
+  SEQ i = 0 FOR 4
+    sum := sum + arr[i]
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "100\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ArrayExpressionIndex(t *testing.T) {
+	// Test using variable and expression as array index
+	occam := `SEQ
+  [3]INT arr:
+  INT idx:
+  arr[0] := 100
+  arr[1] := 200
+  arr[2] := 300
+  idx := 1
+  print.int(arr[idx])
+  print.int(arr[idx + 1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "200\n300\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

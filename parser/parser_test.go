@@ -488,6 +488,163 @@ func TestReplicatedPar(t *testing.T) {
 	}
 }
 
+func TestArrayDecl(t *testing.T) {
+	input := `[5]INT arr:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ArrayDecl)
+	if !ok {
+		t.Fatalf("expected ArrayDecl, got %T", program.Statements[0])
+	}
+
+	if decl.Type != "INT" {
+		t.Errorf("expected type INT, got %s", decl.Type)
+	}
+
+	sizeLit, ok := decl.Size.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Size)
+	}
+	if sizeLit.Value != 5 {
+		t.Errorf("expected size 5, got %d", sizeLit.Value)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "arr" {
+		t.Errorf("expected name 'arr', got %v", decl.Names)
+	}
+}
+
+func TestArrayDeclMultipleNames(t *testing.T) {
+	input := `[10]INT a, b:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ArrayDecl)
+	if !ok {
+		t.Fatalf("expected ArrayDecl, got %T", program.Statements[0])
+	}
+
+	if decl.Type != "INT" {
+		t.Errorf("expected type INT, got %s", decl.Type)
+	}
+
+	expected := []string{"a", "b"}
+	if len(decl.Names) != len(expected) {
+		t.Fatalf("expected %d names, got %d", len(expected), len(decl.Names))
+	}
+	for i, name := range expected {
+		if decl.Names[i] != name {
+			t.Errorf("expected name %s at position %d, got %s", name, i, decl.Names[i])
+		}
+	}
+}
+
+func TestIndexedAssignment(t *testing.T) {
+	input := `arr[2] := 10
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assign.Name != "arr" {
+		t.Errorf("expected name 'arr', got %s", assign.Name)
+	}
+
+	if assign.Index == nil {
+		t.Fatal("expected index expression, got nil")
+	}
+
+	indexLit, ok := assign.Index.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for index, got %T", assign.Index)
+	}
+	if indexLit.Value != 2 {
+		t.Errorf("expected index 2, got %d", indexLit.Value)
+	}
+
+	valLit, ok := assign.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for value, got %T", assign.Value)
+	}
+	if valLit.Value != 10 {
+		t.Errorf("expected value 10, got %d", valLit.Value)
+	}
+}
+
+func TestIndexExpression(t *testing.T) {
+	input := `x := arr[0] + 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	// Should be: arr[0] + 1 -> BinaryExpr with IndexExpr on left
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	if binExpr.Operator != "+" {
+		t.Errorf("expected +, got %s", binExpr.Operator)
+	}
+
+	indexExpr, ok := binExpr.Left.(*ast.IndexExpr)
+	if !ok {
+		t.Fatalf("expected IndexExpr on left, got %T", binExpr.Left)
+	}
+
+	ident, ok := indexExpr.Left.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier in IndexExpr, got %T", indexExpr.Left)
+	}
+	if ident.Value != "arr" {
+		t.Errorf("expected 'arr', got %s", ident.Value)
+	}
+
+	idxLit, ok := indexExpr.Index.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for index, got %T", indexExpr.Index)
+	}
+	if idxLit.Value != 0 {
+		t.Errorf("expected index 0, got %d", idxLit.Value)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

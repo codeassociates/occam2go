@@ -115,6 +115,27 @@ SEQ
   print.int(result)
 ```
 
+### Arrays
+
+| Occam | Go |
+|-------|-----|
+| `[5]INT arr:` | `arr := make([]int, 5)` |
+| `arr[i] := x` | `arr[i] = x` |
+| `x := arr[i]` | `x = arr[i]` |
+
+Example:
+```occam
+SEQ
+  [5]INT arr:
+  SEQ i = 0 FOR 5
+    arr[i] := (i + 1) * 10
+  INT sum:
+  sum := 0
+  SEQ i = 0 FOR 5
+    sum := sum + arr[i]
+  print.int(sum)
+```
+
 ### ALT (Alternation)
 
 | Occam | Go |
@@ -183,10 +204,6 @@ PAR i = 0 FOR 4
 | `print.bool(x)` | `fmt.Println(x)` |
 | `print.string(x)` | `fmt.Println(x)` |
 | `print.newline()` | `fmt.Println()` |
-
-## Not Yet Implemented
-
-- Arrays
 
 ## How Channels are Mapped
 

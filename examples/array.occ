@@ -1,0 +1,10 @@
+-- Array example: fill an array and compute its sum
+SEQ
+  [5]INT arr:
+  INT sum:
+  SEQ i = 0 FOR 5
+    arr[i] := (i + 1) * 10
+  sum := 0
+  SEQ i = 0 FOR 5
+    sum := sum + arr[i]
+  print.int(sum)
