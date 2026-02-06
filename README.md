@@ -128,3 +128,40 @@ SEQ
 - Replicators (`PAR i = 0 FOR n`)
 - Arrays
 - `WHILE`, `IF` (partial)
+
+## How Channels are Mapped
+
+Both Occam and Go draw from Tony Hoare's Communicating Sequential Processes (CSP) model, making channel communication a natural fit for transpilation.
+
+### Conceptual Mapping
+
+In Occam, channels are the primary mechanism for communication between parallel processes. A channel is a synchronous, unbuffered, point-to-point connection. Go channels share these characteristics by default.
+
+| Concept | Occam | Go |
+|---------|-------|-----|
+| Declaration | `CHAN OF INT c:` | `c := make(chan int)` |
+| Send (blocks until receiver ready) | `c ! value` | `c <- value` |
+| Receive (blocks until sender ready) | `c ? variable` | `variable = <-c` |
+| Synchronisation | Implicit in `!` and `?` | Implicit in `<-` |
+
+### Synchronous Communication
+
+Both languages use synchronous (rendezvous) communication by default:
+
+```occam
+PAR
+  c ! 42      -- blocks until receiver is ready
+  c ? x       -- blocks until sender is ready
+```
+
+The sender and receiver must both be ready before the communication occurs. This is preserved in the generated Go code, where unbuffered channels have the same semantics.
+
+### Differences and Limitations
+
+1. **Channel direction**: Occam channels are inherently unidirectional. Go channels can be bidirectional but can be restricted using types (`chan<-` for send-only, `<-chan` for receive-only). The transpiler currently generates bidirectional Go channels.
+
+2. **Protocol types**: Occam 2 and later versions support protocol types for structured channel communication. These are not currently supported.
+
+3. **Channel arrays**: Occam allows arrays of channels. Not yet implemented.
+
+4. **ALT construct**: Occam's `ALT` allows a process to wait on multiple channels and proceed with whichever is ready first. This maps to Go's `select` statement but is not yet implemented.
