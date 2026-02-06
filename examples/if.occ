@@ -1,0 +1,12 @@
+SEQ
+  INT x, y:
+  x := 5
+  y := 0
+  IF
+    x > 10
+      y := 1
+    x > 0
+      y := 2
+    x = 0
+      y := 3
+  print.int(y)

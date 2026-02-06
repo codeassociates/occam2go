@@ -126,6 +126,23 @@ func TestProcDeclWithRefParam(t *testing.T) {
 	}
 }
 
+func TestIfStatement(t *testing.T) {
+	input := `IF
+  x > 0
+    y := 1
+  x = 0
+    y := 0
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "if (x > 0)") {
+		t.Errorf("expected 'if (x > 0)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "} else if (x == 0)") {
+		t.Errorf("expected '} else if (x == 0)' in output, got:\n%s", output)
+	}
+}
+
 func transpile(t *testing.T, input string) string {
 	t.Helper()
 

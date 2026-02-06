@@ -376,6 +376,48 @@ func TestWhileLoop(t *testing.T) {
 	}
 }
 
+func TestIfStatement(t *testing.T) {
+	input := `IF
+  x > 0
+    y := 1
+  x = 0
+    y := 0
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ifStmt, ok := program.Statements[0].(*ast.IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement, got %T", program.Statements[0])
+	}
+
+	if len(ifStmt.Choices) != 2 {
+		t.Fatalf("expected 2 choices, got %d", len(ifStmt.Choices))
+	}
+
+	if ifStmt.Choices[0].Condition == nil {
+		t.Error("expected condition on first choice")
+	}
+
+	if ifStmt.Choices[0].Body == nil {
+		t.Error("expected body on first choice")
+	}
+
+	if ifStmt.Choices[1].Condition == nil {
+		t.Error("expected condition on second choice")
+	}
+
+	if ifStmt.Choices[1].Body == nil {
+		t.Error("expected body on second choice")
+	}
+}
+
 func TestReplicatedSeq(t *testing.T) {
 	input := `SEQ i = 0 FOR 5
   print.int(i)
