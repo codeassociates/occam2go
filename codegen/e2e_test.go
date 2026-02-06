@@ -384,3 +384,82 @@ func TestE2E_WhileNested(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ReplicatedSeq(t *testing.T) {
+	// Test replicated SEQ: SEQ i = 0 FOR 5 prints 0, 1, 2, 3, 4
+	occam := `SEQ i = 0 FOR 5
+  print.int(i)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n1\n2\n3\n4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedSeqWithExpression(t *testing.T) {
+	// Test replicated SEQ with expression for count
+	occam := `SEQ
+  INT n:
+  n := 3
+  SEQ i = 0 FOR n
+    print.int(i)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n1\n2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedSeqWithStartOffset(t *testing.T) {
+	// Test replicated SEQ with non-zero start
+	occam := `SEQ i = 5 FOR 3
+  print.int(i)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "5\n6\n7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedSeqSum(t *testing.T) {
+	// Test replicated SEQ computing sum: 1+2+3+4+5 = 15
+	occam := `SEQ
+  INT sum:
+  sum := 0
+  SEQ i = 1 FOR 5
+    sum := sum + i
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedPar(t *testing.T) {
+	// Test replicated PAR: PAR i = 0 FOR n spawns n goroutines
+	// Since PAR is concurrent, we use channels to verify all goroutines ran
+	occam := `SEQ
+  CHAN OF INT c:
+  INT sum:
+  sum := 0
+  PAR
+    PAR i = 0 FOR 5
+      c ! i
+    SEQ j = 0 FOR 5
+      INT x:
+      c ? x
+      sum := sum + x
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	// sum should be 0+1+2+3+4 = 10
+	expected := "10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

@@ -275,27 +275,79 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 }
 
 func (g *Generator) generateSeqBlock(seq *ast.SeqBlock) {
-	// SEQ just becomes sequential Go code (Go's default)
-	for _, stmt := range seq.Statements {
-		g.generateStatement(stmt)
+	if seq.Replicator != nil {
+		// Replicated SEQ: SEQ i = start FOR count becomes a for loop
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := ", seq.Replicator.Variable))
+		g.generateExpression(seq.Replicator.Start)
+		g.write(fmt.Sprintf("; %s < ", seq.Replicator.Variable))
+		g.generateExpression(seq.Replicator.Start)
+		g.write(" + ")
+		g.generateExpression(seq.Replicator.Count)
+		g.write(fmt.Sprintf("; %s++ {\n", seq.Replicator.Variable))
+		g.indent++
+		for _, stmt := range seq.Statements {
+			g.generateStatement(stmt)
+		}
+		g.indent--
+		g.writeLine("}")
+	} else {
+		// SEQ just becomes sequential Go code (Go's default)
+		for _, stmt := range seq.Statements {
+			g.generateStatement(stmt)
+		}
 	}
 }
 
 func (g *Generator) generateParBlock(par *ast.ParBlock) {
-	// PAR becomes goroutines with WaitGroup
-	g.writeLine("var wg sync.WaitGroup")
-	g.writeLine(fmt.Sprintf("wg.Add(%d)", len(par.Statements)))
+	if par.Replicator != nil {
+		// Replicated PAR: PAR i = start FOR count becomes goroutines in a loop
+		g.writeLine("var wg sync.WaitGroup")
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write("wg.Add(int(")
+		g.generateExpression(par.Replicator.Count)
+		g.write("))\n")
 
-	for _, stmt := range par.Statements {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := ", par.Replicator.Variable))
+		g.generateExpression(par.Replicator.Start)
+		g.write(fmt.Sprintf("; %s < ", par.Replicator.Variable))
+		g.generateExpression(par.Replicator.Start)
+		g.write(" + ")
+		g.generateExpression(par.Replicator.Count)
+		g.write(fmt.Sprintf("; %s++ {\n", par.Replicator.Variable))
+		g.indent++
+
+		// Capture loop variable to avoid closure issues
+		g.writeLine(fmt.Sprintf("%s := %s", par.Replicator.Variable, par.Replicator.Variable))
 		g.writeLine("go func() {")
 		g.indent++
 		g.writeLine("defer wg.Done()")
-		g.generateStatement(stmt)
+		for _, stmt := range par.Statements {
+			g.generateStatement(stmt)
+		}
 		g.indent--
 		g.writeLine("}()")
-	}
 
-	g.writeLine("wg.Wait()")
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("wg.Wait()")
+	} else {
+		// PAR becomes goroutines with WaitGroup
+		g.writeLine("var wg sync.WaitGroup")
+		g.writeLine(fmt.Sprintf("wg.Add(%d)", len(par.Statements)))
+
+		for _, stmt := range par.Statements {
+			g.writeLine("go func() {")
+			g.indent++
+			g.writeLine("defer wg.Done()")
+			g.generateStatement(stmt)
+			g.indent--
+			g.writeLine("}()")
+		}
+
+		g.writeLine("wg.Wait()")
+	}
 }
 
 func (g *Generator) generateAltBlock(alt *ast.AltBlock) {

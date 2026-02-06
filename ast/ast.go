@@ -54,22 +54,33 @@ func (a *Assignment) statementNode()       {}
 func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
 
 // SeqBlock represents a SEQ block (sequential execution)
+// If Replicator is non-nil, this is a replicated SEQ (SEQ i = 0 FOR n)
 type SeqBlock struct {
 	Token      lexer.Token // the SEQ token
 	Statements []Statement
+	Replicator *Replicator // optional replicator
 }
 
 func (s *SeqBlock) statementNode()       {}
 func (s *SeqBlock) TokenLiteral() string { return s.Token.Literal }
 
 // ParBlock represents a PAR block (parallel execution)
+// If Replicator is non-nil, this is a replicated PAR (PAR i = 0 FOR n)
 type ParBlock struct {
 	Token      lexer.Token // the PAR token
 	Statements []Statement
+	Replicator *Replicator // optional replicator
 }
 
 func (p *ParBlock) statementNode()       {}
 func (p *ParBlock) TokenLiteral() string { return p.Token.Literal }
+
+// Replicator represents a replication spec: i = start FOR count
+type Replicator struct {
+	Variable string     // loop variable name
+	Start    Expression // start value
+	Count    Expression // number of iterations
+}
 
 // Skip represents the SKIP statement (no-op)
 type Skip struct {

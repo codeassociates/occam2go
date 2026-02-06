@@ -283,6 +283,21 @@ func (p *Parser) parseReceive() *ast.Receive {
 func (p *Parser) parseSeqBlock() *ast.SeqBlock {
 	block := &ast.SeqBlock{Token: p.curToken}
 
+	// Check for replicator: SEQ i = start FOR count
+	if p.peekTokenIs(lexer.IDENT) {
+		// Save position to check if it's a replicator
+		p.nextToken() // move to identifier
+		if p.peekTokenIs(lexer.EQ) {
+			// This is a replicator
+			block.Replicator = p.parseReplicator()
+		} else {
+			// Not a replicator, this shouldn't happen in valid Occam
+			// (SEQ followed by identifier at same indentation level)
+			p.addError("unexpected identifier after SEQ")
+			return block
+		}
+	}
+
 	// Skip to next line
 	for p.peekTokenIs(lexer.NEWLINE) {
 		p.nextToken()
@@ -303,6 +318,21 @@ func (p *Parser) parseSeqBlock() *ast.SeqBlock {
 func (p *Parser) parseParBlock() *ast.ParBlock {
 	block := &ast.ParBlock{Token: p.curToken}
 
+	// Check for replicator: PAR i = start FOR count
+	if p.peekTokenIs(lexer.IDENT) {
+		// Save position to check if it's a replicator
+		p.nextToken() // move to identifier
+		if p.peekTokenIs(lexer.EQ) {
+			// This is a replicator
+			block.Replicator = p.parseReplicator()
+		} else {
+			// Not a replicator, this shouldn't happen in valid Occam
+			// (PAR followed by identifier at same indentation level)
+			p.addError("unexpected identifier after PAR")
+			return block
+		}
+	}
+
 	// Skip to next line
 	for p.peekTokenIs(lexer.NEWLINE) {
 		p.nextToken()
@@ -318,6 +348,34 @@ func (p *Parser) parseParBlock() *ast.ParBlock {
 	block.Statements = p.parseBlockStatements()
 
 	return block
+}
+
+// parseReplicator parses: variable = start FOR count
+// Assumes the variable identifier has already been consumed and is in curToken
+func (p *Parser) parseReplicator() *ast.Replicator {
+	rep := &ast.Replicator{
+		Variable: p.curToken.Literal,
+	}
+
+	// Expect =
+	if !p.expectPeek(lexer.EQ) {
+		return nil
+	}
+
+	// Parse start expression
+	p.nextToken()
+	rep.Start = p.parseExpression(LOWEST)
+
+	// Expect FOR
+	if !p.expectPeek(lexer.FOR) {
+		return nil
+	}
+
+	// Parse count expression
+	p.nextToken()
+	rep.Count = p.parseExpression(LOWEST)
+
+	return rep
 }
 
 func (p *Parser) parseAltBlock() *ast.AltBlock {

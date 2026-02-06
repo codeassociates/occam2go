@@ -1,0 +1,6 @@
+-- Demonstrate replicated SEQ and PAR
+
+-- Simple replicated SEQ: print 0 to 4
+SEQ i = 0 FOR 5
+  print.int(i)
+

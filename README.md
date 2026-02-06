@@ -120,6 +120,8 @@ SEQ
 |-------|-----|
 | `ALT` | `select` |
 | `guard & c ? x` | Conditional channel with nil pattern |
+| `SEQ i = 0 FOR n` | `for i := 0; i < n; i++` |
+| `PAR i = 0 FOR n` | Parallel `for` loop with goroutines |
 
 Example:
 ```occam
@@ -149,6 +151,29 @@ ALT
     process(y)
 ```
 
+### Replicators
+
+Replicators allow you to repeat a block of code a specified number of times.
+
+| Occam | Go |
+|-------|-----|
+| `SEQ i = 0 FOR n` | `for i := 0; i < n; i++` |
+| `PAR i = 0 FOR n` | Parallel for loop with goroutines |
+
+Example with replicated SEQ:
+```occam
+SEQ i = 1 FOR 5
+  print.int(i)
+```
+
+This prints 1, 2, 3, 4, 5.
+
+Example with replicated PAR (spawns n concurrent processes):
+```occam
+PAR i = 0 FOR 4
+  c ! i
+```
+
 ### Built-in I/O Procedures
 
 | Occam | Go |
@@ -160,7 +185,6 @@ ALT
 
 ## Not Yet Implemented
 
-- Replicators (`PAR i = 0 FOR n`, `SEQ i = 0 FOR n`)
 - `IF` (guarded commands)
 - Arrays
 

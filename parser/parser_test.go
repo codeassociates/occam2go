@@ -376,6 +376,76 @@ func TestWhileLoop(t *testing.T) {
 	}
 }
 
+func TestReplicatedSeq(t *testing.T) {
+	input := `SEQ i = 0 FOR 5
+  print.int(i)
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	seq, ok := program.Statements[0].(*ast.SeqBlock)
+	if !ok {
+		t.Fatalf("expected SeqBlock, got %T", program.Statements[0])
+	}
+
+	if seq.Replicator == nil {
+		t.Fatal("expected replicator on SEQ block")
+	}
+
+	if seq.Replicator.Variable != "i" {
+		t.Errorf("expected variable 'i', got %s", seq.Replicator.Variable)
+	}
+
+	startLit, ok := seq.Replicator.Start.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for start, got %T", seq.Replicator.Start)
+	}
+	if startLit.Value != 0 {
+		t.Errorf("expected start 0, got %d", startLit.Value)
+	}
+
+	countLit, ok := seq.Replicator.Count.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for count, got %T", seq.Replicator.Count)
+	}
+	if countLit.Value != 5 {
+		t.Errorf("expected count 5, got %d", countLit.Value)
+	}
+}
+
+func TestReplicatedPar(t *testing.T) {
+	input := `PAR i = 0 FOR 3
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	par, ok := program.Statements[0].(*ast.ParBlock)
+	if !ok {
+		t.Fatalf("expected ParBlock, got %T", program.Statements[0])
+	}
+
+	if par.Replicator == nil {
+		t.Fatal("expected replicator on PAR block")
+	}
+
+	if par.Replicator.Variable != "i" {
+		t.Errorf("expected variable 'i', got %s", par.Replicator.Variable)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {
