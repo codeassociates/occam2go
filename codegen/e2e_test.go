@@ -671,3 +671,60 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_CaseBasic(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 2
+  CASE x
+    1
+      print.int(10)
+    2
+      print.int(20)
+    3
+      print.int(30)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CaseElse(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 99
+  CASE x
+    1
+      print.int(10)
+    2
+      print.int(20)
+    ELSE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CaseExpression(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 3
+  CASE x + 1
+    3
+      print.int(30)
+    4
+      print.int(40)
+    ELSE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "40\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

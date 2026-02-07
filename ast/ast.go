@@ -177,6 +177,22 @@ type IfChoice struct {
 func (i *IfStatement) statementNode()       {}
 func (i *IfStatement) TokenLiteral() string { return i.Token.Literal }
 
+// CaseStatement represents a CASE statement
+type CaseStatement struct {
+	Token    lexer.Token  // the CASE token
+	Selector Expression   // the selector expression
+	Choices  []CaseChoice
+}
+
+type CaseChoice struct {
+	Values []Expression // nil/empty for ELSE
+	IsElse bool
+	Body   Statement
+}
+
+func (c *CaseStatement) statementNode()       {}
+func (c *CaseStatement) TokenLiteral() string { return c.Token.Literal }
+
 // Expressions
 
 // Identifier represents a variable reference

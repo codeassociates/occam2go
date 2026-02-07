@@ -735,6 +735,73 @@ func TestFuncDeclValof(t *testing.T) {
 	}
 }
 
+func TestCaseStatement(t *testing.T) {
+	input := `CASE x
+  1
+    y := 10
+  2
+    y := 20
+  ELSE
+    y := 0
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	caseStmt, ok := program.Statements[0].(*ast.CaseStatement)
+	if !ok {
+		t.Fatalf("expected CaseStatement, got %T", program.Statements[0])
+	}
+
+	if caseStmt.Selector == nil {
+		t.Fatal("expected selector expression")
+	}
+
+	ident, ok := caseStmt.Selector.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier selector, got %T", caseStmt.Selector)
+	}
+	if ident.Value != "x" {
+		t.Errorf("expected selector 'x', got %s", ident.Value)
+	}
+
+	if len(caseStmt.Choices) != 3 {
+		t.Fatalf("expected 3 choices, got %d", len(caseStmt.Choices))
+	}
+
+	// First choice: value 1
+	if caseStmt.Choices[0].IsElse {
+		t.Error("first choice should not be ELSE")
+	}
+	if len(caseStmt.Choices[0].Values) != 1 {
+		t.Fatalf("expected 1 value in first choice, got %d", len(caseStmt.Choices[0].Values))
+	}
+	if caseStmt.Choices[0].Body == nil {
+		t.Error("expected body on first choice")
+	}
+
+	// Second choice: value 2
+	if caseStmt.Choices[1].IsElse {
+		t.Error("second choice should not be ELSE")
+	}
+	if caseStmt.Choices[1].Body == nil {
+		t.Error("expected body on second choice")
+	}
+
+	// Third choice: ELSE
+	if !caseStmt.Choices[2].IsElse {
+		t.Error("third choice should be ELSE")
+	}
+	if caseStmt.Choices[2].Body == nil {
+		t.Error("expected body on ELSE choice")
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

@@ -47,6 +47,8 @@ const (
 	PAR
 	ALT
 	IF
+	CASE
+	ELSE
 	WHILE
 	FOR
 	PROC
@@ -111,6 +113,8 @@ var tokenNames = map[TokenType]string{
 	PAR:       "PAR",
 	ALT:       "ALT",
 	IF:        "IF",
+	CASE:      "CASE",
+	ELSE:      "ELSE",
 	WHILE:     "WHILE",
 	FOR:       "FOR",
 	PROC:      "PROC",
@@ -140,6 +144,8 @@ var keywords = map[string]TokenType{
 	"PAR":   PAR,
 	"ALT":   ALT,
 	"IF":    IF,
+	"CASE":  CASE,
+	"ELSE":  ELSE,
 	"WHILE": WHILE,
 	"FOR":   FOR,
 	"PROC":  PROC,

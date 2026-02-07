@@ -144,6 +144,12 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 				return true
 			}
 		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsPar(choice.Body) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -185,6 +191,12 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 			return true
 		}
 	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsPrint(choice.Body) {
+				return true
+			}
+		}
+	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
 			if choice.Body != nil && g.containsPrint(choice.Body) {
 				return true
@@ -240,6 +252,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateWhileLoop(s)
 	case *ast.IfStatement:
 		g.generateIfStatement(s)
+	case *ast.CaseStatement:
+		g.generateCaseStatement(s)
 	}
 }
 
@@ -585,6 +599,36 @@ func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 
 		g.indent--
 	}
+	g.writeLine("}")
+}
+
+func (g *Generator) generateCaseStatement(stmt *ast.CaseStatement) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write("switch ")
+	g.generateExpression(stmt.Selector)
+	g.write(" {\n")
+
+	for _, choice := range stmt.Choices {
+		if choice.IsElse {
+			g.writeLine("default:")
+		} else {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write("case ")
+			for i, val := range choice.Values {
+				if i > 0 {
+					g.write(", ")
+				}
+				g.generateExpression(val)
+			}
+			g.write(":\n")
+		}
+		g.indent++
+		if choice.Body != nil {
+			g.generateStatement(choice.Body)
+		}
+		g.indent--
+	}
+
 	g.writeLine("}")
 }
 

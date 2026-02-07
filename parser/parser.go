@@ -158,6 +158,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseWhileLoop()
 	case lexer.IF:
 		return p.parseIfStatement()
+	case lexer.CASE:
+		return p.parseCaseStatement()
 	case lexer.IDENT:
 		// Could be assignment, indexed assignment, send, receive, or procedure call
 		if p.peekTokenIs(lexer.LBRACKET) {
@@ -1004,6 +1006,86 @@ func (p *Parser) parseIfStatement() *ast.IfStatement {
 
 		choice := ast.IfChoice{}
 		choice.Condition = p.parseExpression(LOWEST)
+
+		// Skip newlines and expect INDENT for body
+		for p.peekTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.peekTokenIs(lexer.INDENT) {
+			p.nextToken() // consume INDENT
+			p.nextToken() // move to body
+			choice.Body = p.parseStatement()
+
+			// Advance past the last token of the statement if needed
+			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+				p.nextToken()
+			}
+		}
+
+		stmt.Choices = append(stmt.Choices, choice)
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseCaseStatement() *ast.CaseStatement {
+	stmt := &ast.CaseStatement{Token: p.curToken}
+
+	// Parse selector expression on the same line
+	p.nextToken()
+	stmt.Selector = p.parseExpression(LOWEST)
+
+	// Skip to next line
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after CASE")
+		return stmt
+	}
+	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
+	p.nextToken() // move into block
+
+	// Parse case choices
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return stmt
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		choice := ast.CaseChoice{}
+
+		if p.curTokenIs(lexer.ELSE) {
+			choice.IsElse = true
+		} else {
+			// Parse value expression
+			choice.Values = append(choice.Values, p.parseExpression(LOWEST))
+		}
 
 		// Skip newlines and expect INDENT for body
 		for p.peekTokenIs(lexer.NEWLINE) {
