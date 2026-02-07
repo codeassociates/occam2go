@@ -307,4 +307,26 @@ type AltCase struct {
 	Channel  string     // channel name
 	Variable string     // variable to receive into
 	Body     Statement  // the body to execute
+	IsTimer  bool       // true if this is a timer AFTER case
+	Timer    string     // timer name (when IsTimer)
+	Deadline Expression // AFTER deadline expression (when IsTimer)
 }
+
+// TimerDecl represents a timer declaration: TIMER tim:
+type TimerDecl struct {
+	Token lexer.Token // the TIMER token
+	Names []string    // timer variable names
+}
+
+func (td *TimerDecl) statementNode()       {}
+func (td *TimerDecl) TokenLiteral() string { return td.Token.Literal }
+
+// TimerRead represents a timer read: tim ? t
+type TimerRead struct {
+	Token    lexer.Token // the ? token
+	Timer    string      // timer name
+	Variable string      // variable to receive time into
+}
+
+func (tr *TimerRead) statementNode()       {}
+func (tr *TimerRead) TokenLiteral() string { return tr.Token.Literal }

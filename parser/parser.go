@@ -31,6 +31,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.GT:       LESSGREATER,
 	lexer.LE:       LESSGREATER,
 	lexer.GE:       LESSGREATER,
+	lexer.AFTER:    LESSGREATER,
 	lexer.PLUS:     SUM,
 	lexer.MINUS:    SUM,
 	lexer.MULTIPLY: PRODUCT,
@@ -48,12 +49,16 @@ type Parser struct {
 
 	// Track current indentation level
 	indentLevel int
+
+	// Track timer names to distinguish timer reads from channel receives
+	timerNames map[string]bool
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
-		l:      l,
-		errors: []string{},
+		l:          l,
+		errors:     []string{},
+		timerNames: make(map[string]bool),
 	}
 	// Read two tokens to initialize curToken and peekToken
 	p.nextToken()
@@ -144,6 +149,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseArrayDecl()
 	case lexer.CHAN:
 		return p.parseChanDecl()
+	case lexer.TIMER:
+		return p.parseTimerDecl()
 	case lexer.SEQ:
 		return p.parseSeqBlock()
 	case lexer.PAR:
@@ -172,6 +179,9 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseSend()
 		}
 		if p.peekTokenIs(lexer.RECEIVE) {
+			if p.timerNames[p.curToken.Literal] {
+				return p.parseTimerRead()
+			}
 			return p.parseReceive()
 		}
 		return p.parseProcCall()
@@ -344,6 +354,47 @@ func (p *Parser) parseChanDecl() *ast.ChanDecl {
 	}
 
 	return decl
+}
+
+func (p *Parser) parseTimerDecl() *ast.TimerDecl {
+	decl := &ast.TimerDecl{Token: p.curToken}
+
+	// Parse timer names
+	for {
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		decl.Names = append(decl.Names, p.curToken.Literal)
+		p.timerNames[p.curToken.Literal] = true
+
+		if p.peekTokenIs(lexer.COMMA) {
+			p.nextToken() // consume comma
+		} else {
+			break
+		}
+	}
+
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return decl
+}
+
+func (p *Parser) parseTimerRead() *ast.TimerRead {
+	stmt := &ast.TimerRead{
+		Timer: p.curToken.Literal,
+	}
+
+	p.nextToken() // move to ?
+	stmt.Token = p.curToken
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	stmt.Variable = p.curToken.Literal
+
+	return stmt
 }
 
 func (p *Parser) parseSend() *ast.Send {
@@ -552,15 +603,28 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 
 	// Look ahead to determine if this is a guard or channel
 	// If next token is & then we have a guard
-	// If next token is ? then it's a channel receive
+	// If next token is ? then it's a channel/timer receive
 	if p.peekTokenIs(lexer.RECEIVE) {
-		// Simple case: channel ? var
-		altCase.Channel = p.curToken.Literal
-		p.nextToken() // move to ?
-		if !p.expectPeek(lexer.IDENT) {
-			return nil
+		name := p.curToken.Literal
+		if p.timerNames[name] {
+			// Timer case: tim ? AFTER deadline
+			altCase.IsTimer = true
+			altCase.Timer = name
+			p.nextToken() // move to ?
+			if !p.expectPeek(lexer.AFTER) {
+				return nil
+			}
+			p.nextToken() // move past AFTER
+			altCase.Deadline = p.parseExpression(LOWEST)
+		} else {
+			// Simple case: channel ? var
+			altCase.Channel = name
+			p.nextToken() // move to ?
+			if !p.expectPeek(lexer.IDENT) {
+				return nil
+			}
+			altCase.Variable = p.curToken.Literal
 		}
-		altCase.Variable = p.curToken.Literal
 	} else {
 		// Could be a guard followed by & channel ? var
 		// For simplicity, parse expression until we hit &
@@ -1166,7 +1230,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		switch p.peekToken.Type {
 		case lexer.PLUS, lexer.MINUS, lexer.MULTIPLY, lexer.DIVIDE, lexer.MODULO,
 			lexer.EQ, lexer.NEQ, lexer.LT, lexer.GT, lexer.LE, lexer.GE,
-			lexer.AND, lexer.OR:
+			lexer.AND, lexer.OR, lexer.AFTER:
 			p.nextToken()
 			left = p.parseBinaryExpr(left)
 		case lexer.LBRACKET:

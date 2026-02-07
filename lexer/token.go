@@ -70,6 +70,8 @@ const (
 	BYTE_TYPE
 	BOOL_TYPE
 	REAL_TYPE
+	TIMER
+	AFTER
 	VAL
 	keyword_end
 )
@@ -136,6 +138,8 @@ var tokenNames = map[TokenType]string{
 	BYTE_TYPE: "BYTE",
 	BOOL_TYPE: "BOOL",
 	REAL_TYPE: "REAL",
+	TIMER:    "TIMER",
+	AFTER:    "AFTER",
 	VAL:       "VAL",
 }
 
@@ -167,6 +171,8 @@ var keywords = map[string]TokenType{
 	"BYTE":  BYTE_TYPE,
 	"BOOL":  BOOL_TYPE,
 	"REAL":  REAL_TYPE,
+	"TIMER": TIMER,
+	"AFTER": AFTER,
 	"VAL":   VAL,
 }
 

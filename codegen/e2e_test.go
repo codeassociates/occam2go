@@ -728,3 +728,64 @@ func TestE2E_CaseExpression(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_TimerRead(t *testing.T) {
+	// Test reading a timer: value should be positive (microseconds since epoch)
+	occam := `SEQ
+  TIMER tim:
+  INT t:
+  tim ? t
+  IF
+    t > 0
+      print.int(1)
+    TRUE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_TimerAltTimeout(t *testing.T) {
+	// Test ALT with timer timeout: no channel is ready, so timer fires
+	occam := `SEQ
+  TIMER tim:
+  INT t:
+  tim ? t
+  CHAN OF INT c:
+  INT result:
+  result := 0
+  ALT
+    c ? result
+      result := 1
+    tim ? AFTER (t + 1000)
+      result := 2
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AfterExpression(t *testing.T) {
+	// Test AFTER as a boolean expression in IF
+	occam := `SEQ
+  INT t1, t2:
+  t1 := 100
+  t2 := 200
+  IF
+    t2 AFTER t1
+      print.int(1)
+    TRUE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

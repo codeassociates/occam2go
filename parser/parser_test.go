@@ -802,6 +802,114 @@ func TestCaseStatement(t *testing.T) {
 	}
 }
 
+func TestTimerDecl(t *testing.T) {
+	input := `TIMER tim:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.TimerDecl)
+	if !ok {
+		t.Fatalf("expected TimerDecl, got %T", program.Statements[0])
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "tim" {
+		t.Errorf("expected name 'tim', got %v", decl.Names)
+	}
+}
+
+func TestTimerRead(t *testing.T) {
+	input := `SEQ
+  TIMER tim:
+  INT t:
+  tim ? t
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	seq, ok := program.Statements[0].(*ast.SeqBlock)
+	if !ok {
+		t.Fatalf("expected SeqBlock, got %T", program.Statements[0])
+	}
+
+	if len(seq.Statements) != 3 {
+		t.Fatalf("expected 3 statements in SEQ, got %d", len(seq.Statements))
+	}
+
+	_, ok = seq.Statements[0].(*ast.TimerDecl)
+	if !ok {
+		t.Errorf("expected TimerDecl, got %T", seq.Statements[0])
+	}
+
+	tr, ok := seq.Statements[2].(*ast.TimerRead)
+	if !ok {
+		t.Fatalf("expected TimerRead, got %T", seq.Statements[2])
+	}
+
+	if tr.Timer != "tim" {
+		t.Errorf("expected timer 'tim', got %s", tr.Timer)
+	}
+
+	if tr.Variable != "t" {
+		t.Errorf("expected variable 't', got %s", tr.Variable)
+	}
+}
+
+func TestAfterExpression(t *testing.T) {
+	input := `x := t2 AFTER t1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	if binExpr.Operator != "AFTER" {
+		t.Errorf("expected operator 'AFTER', got %s", binExpr.Operator)
+	}
+
+	left, ok := binExpr.Left.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier on left, got %T", binExpr.Left)
+	}
+	if left.Value != "t2" {
+		t.Errorf("expected 't2', got %s", left.Value)
+	}
+
+	right, ok := binExpr.Right.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier on right, got %T", binExpr.Right)
+	}
+	if right.Value != "t1" {
+		t.Errorf("expected 't1', got %s", right.Value)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

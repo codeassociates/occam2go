@@ -13,6 +13,7 @@ type Generator struct {
 	builder  strings.Builder
 	needSync bool // track if we need sync package import
 	needFmt  bool // track if we need fmt package import
+	needTime bool // track if we need time package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -38,6 +39,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.builder.Reset()
 	g.needSync = false
 	g.needFmt = false
+	g.needTime = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 
@@ -48,6 +50,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.containsPrint(stmt) {
 			g.needFmt = true
+		}
+		if g.containsTimer(stmt) {
+			g.needTime = true
 		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
@@ -62,7 +67,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt {
+	if g.needSync || g.needFmt || g.needTime {
 		g.writeLine("import (")
 		g.indent++
 		if g.needFmt {
@@ -70,6 +75,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.needSync {
 			g.writeLine(`"sync"`)
+		}
+		if g.needTime {
+			g.writeLine(`"time"`)
 		}
 		g.indent--
 		g.writeLine(")")
@@ -206,6 +214,61 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 	return false
 }
 
+func (g *Generator) containsTimer(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.TimerDecl, *ast.TimerRead:
+		return true
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.IsTimer {
+				return true
+			}
+			if c.Body != nil && g.containsTimer(c.Body) {
+				return true
+			}
+		}
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsTimer(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsTimer(inner) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		if s.Body != nil && g.containsTimer(s.Body) {
+			return true
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsTimer(inner) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		if s.Body != nil && g.containsTimer(s.Body) {
+			return true
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsTimer(choice.Body) {
+				return true
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsTimer(choice.Body) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (g *Generator) writeLine(s string) {
 	if s == "" {
 		g.builder.WriteString("\n")
@@ -254,6 +317,10 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateIfStatement(s)
 	case *ast.CaseStatement:
 		g.generateCaseStatement(s)
+	case *ast.TimerDecl:
+		g.generateTimerDecl(s)
+	case *ast.TimerRead:
+		g.generateTimerRead(s)
 	}
 }
 
@@ -267,6 +334,16 @@ func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	for _, name := range decl.Names {
 		g.writeLine(fmt.Sprintf("%s := make(chan %s)", name, goType))
 	}
+}
+
+func (g *Generator) generateTimerDecl(decl *ast.TimerDecl) {
+	for _, name := range decl.Names {
+		g.writeLine(fmt.Sprintf("// TIMER %s", name))
+	}
+}
+
+func (g *Generator) generateTimerRead(tr *ast.TimerRead) {
+	g.writeLine(fmt.Sprintf("%s = int(time.Now().UnixMicro())", tr.Variable))
 }
 
 func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
@@ -433,7 +510,11 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 	g.writeLine("select {")
 	for i, c := range alt.Cases {
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		if c.Guard != nil {
+		if c.IsTimer {
+			g.write("case <-time.After(time.Duration(")
+			g.generateExpression(c.Deadline)
+			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
+		} else if c.Guard != nil {
 			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", c.Variable, i))
 		} else {
 			g.write(fmt.Sprintf("case %s = <-%s:\n", c.Variable, c.Channel))
@@ -697,6 +778,8 @@ func (g *Generator) occamOpToGo(op string) string {
 		return "!"
 	case "\\":
 		return "%"
+	case "AFTER":
+		return ">"
 	default:
 		return op // +, -, *, /, <, >, <=, >= are the same
 	}
