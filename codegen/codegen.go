@@ -52,6 +52,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
 		}
+		if fn, ok := stmt.(*ast.FuncDecl); ok {
+			g.procSigs[fn.Name] = fn.Params
+		}
 	}
 
 	// Write package declaration
@@ -78,9 +81,10 @@ func (g *Generator) Generate(program *ast.Program) string {
 	var mainStatements []ast.Statement
 
 	for _, stmt := range program.Statements {
-		if _, ok := stmt.(*ast.ProcDecl); ok {
+		switch stmt.(type) {
+		case *ast.ProcDecl, *ast.FuncDecl:
 			procDecls = append(procDecls, stmt)
-		} else {
+		default:
 			mainStatements = append(mainStatements, stmt)
 		}
 	}
@@ -124,6 +128,12 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 		if s.Body != nil && g.containsPar(s.Body) {
 			return true
 		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsPar(inner) {
+				return true
+			}
+		}
 	case *ast.WhileLoop:
 		if s.Body != nil && g.containsPar(s.Body) {
 			return true
@@ -163,6 +173,12 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 	case *ast.ProcDecl:
 		if s.Body != nil && g.containsPrint(s.Body) {
 			return true
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsPrint(inner) {
+				return true
+			}
 		}
 	case *ast.WhileLoop:
 		if s.Body != nil && g.containsPrint(s.Body) {
@@ -216,6 +232,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.writeLine("// SKIP")
 	case *ast.ProcDecl:
 		g.generateProcDecl(s)
+	case *ast.FuncDecl:
+		g.generateFuncDecl(s)
 	case *ast.ProcCall:
 		g.generateProcCall(s)
 	case *ast.WhileLoop:
@@ -483,6 +501,40 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 	g.write("\n")
 }
 
+func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
+	goReturnType := g.occamTypeToGo(fn.ReturnType)
+	params := g.generateProcParams(fn.Params)
+	g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, goReturnType))
+	g.indent++
+
+	for _, stmt := range fn.Body {
+		g.generateStatement(stmt)
+	}
+
+	if fn.ResultExpr != nil {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write("return ")
+		g.generateExpression(fn.ResultExpr)
+		g.write("\n")
+	}
+
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+}
+
+func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
+	g.write(call.Name)
+	g.write("(")
+	for i, arg := range call.Args {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.generateExpression(arg)
+	}
+	g.write(")")
+}
+
 func (g *Generator) generatePrintCall(call *ast.ProcCall) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 
@@ -561,6 +613,8 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write("[")
 		g.generateExpression(e.Index)
 		g.write("]")
+	case *ast.FuncCall:
+		g.generateFuncCallExpr(e)
 	}
 }
 

@@ -389,34 +389,28 @@ func TestE2E_IfThreeBranches(t *testing.T) {
 	}
 }
 
-// BUG: The IF parser fails when choices have nested multi-statement bodies (SEQ blocks).
-// After parsing the first choice's SEQ body (which has its own INDENT/DEDENT), the parser
-// loses track of the indentation level and fails to parse the second choice's condition.
-// Error: "unexpected token: <=" on the second choice's condition.
-// Uncomment this test once the IF parser's indentation handling is fixed.
-//
-// func TestE2E_IfWithSeqBody(t *testing.T) {
-// 	// Test IF with SEQ body in branches
-// 	occam := `SEQ
-//   INT x, y:
-//   x := 10
-//   y := 0
-//   IF
-//     x > 5
-//       SEQ
-//         y := x * 2
-//         print.int(y)
-//     x <= 5
-//       SEQ
-//         y := x * 3
-//         print.int(y)
-// `
-// 	output := transpileCompileRun(t, occam)
-// 	expected := "20\n"
-// 	if output != expected {
-// 		t.Errorf("expected %q, got %q", expected, output)
-// 	}
-// }
+func TestE2E_IfWithSeqBody(t *testing.T) {
+	// Test IF with SEQ body in branches
+	occam := `SEQ
+  INT x, y:
+  x := 10
+  y := 0
+  IF
+    x > 5
+      SEQ
+        y := x * 2
+        print.int(y)
+    x <= 5
+      SEQ
+        y := x * 3
+        print.int(y)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
 
 func TestE2E_WhileBasic(t *testing.T) {
 	// Test basic WHILE loop
@@ -620,6 +614,59 @@ func TestE2E_ArrayExpressionIndex(t *testing.T) {
 `
 	output := transpileCompileRun(t, occam)
 	expected := "200\n300\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_FunctionIS(t *testing.T) {
+	occam := `INT FUNCTION square(VAL INT x)
+  IS x * x
+
+SEQ
+  INT n:
+  n := square(7)
+  print.int(n)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "49\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_FunctionValof(t *testing.T) {
+	occam := `INT FUNCTION max(VAL INT a, VAL INT b)
+  INT result:
+  VALOF
+    IF
+      a > b
+        result := a
+      TRUE
+        result := b
+    RESULT result
+
+SEQ
+  print.int(max(10, 20))
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_FunctionInExpr(t *testing.T) {
+	occam := `INT FUNCTION double(VAL INT x)
+  IS x * 2
+
+SEQ
+  INT a:
+  a := double(3) + double(4)
+  print.int(a)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "14\n"
 	if output != expected {
 		t.Errorf("expected %q, got %q", expected, output)
 	}

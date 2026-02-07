@@ -645,6 +645,96 @@ func TestIndexExpression(t *testing.T) {
 	}
 }
 
+func TestFuncDeclIS(t *testing.T) {
+	input := `INT FUNCTION square(VAL INT x)
+  IS x * x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	fn, ok := program.Statements[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
+	}
+
+	if fn.ReturnType != "INT" {
+		t.Errorf("expected return type INT, got %s", fn.ReturnType)
+	}
+
+	if fn.Name != "square" {
+		t.Errorf("expected name 'square', got %s", fn.Name)
+	}
+
+	if len(fn.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(fn.Params))
+	}
+
+	if fn.Params[0].Name != "x" || fn.Params[0].Type != "INT" || !fn.Params[0].IsVal {
+		t.Errorf("expected VAL INT x, got %+v", fn.Params[0])
+	}
+
+	if fn.ResultExpr == nil {
+		t.Fatal("expected result expression, got nil")
+	}
+
+	if len(fn.Body) != 0 {
+		t.Errorf("expected empty body for IS form, got %d statements", len(fn.Body))
+	}
+}
+
+func TestFuncDeclValof(t *testing.T) {
+	input := `INT FUNCTION max(VAL INT a, VAL INT b)
+  INT result:
+  VALOF
+    IF
+      a > b
+        result := a
+      TRUE
+        result := b
+    RESULT result
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	fn, ok := program.Statements[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
+	}
+
+	if fn.ReturnType != "INT" {
+		t.Errorf("expected return type INT, got %s", fn.ReturnType)
+	}
+
+	if fn.Name != "max" {
+		t.Errorf("expected name 'max', got %s", fn.Name)
+	}
+
+	if len(fn.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(fn.Params))
+	}
+
+	if fn.ResultExpr == nil {
+		t.Fatal("expected result expression, got nil")
+	}
+
+	// Body should contain local var decl and the IF statement
+	if len(fn.Body) < 1 {
+		t.Fatal("expected at least 1 statement in body")
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

@@ -51,6 +51,10 @@ const (
 	FOR
 	PROC
 	FUNC
+	FUNCTION
+	VALOF
+	RESULT
+	IS
 	CHAN
 	OF
 	TRUE
@@ -111,6 +115,10 @@ var tokenNames = map[TokenType]string{
 	FOR:       "FOR",
 	PROC:      "PROC",
 	FUNC:      "FUNC",
+	FUNCTION:  "FUNCTION",
+	VALOF:     "VALOF",
+	RESULT:    "RESULT",
+	IS:        "IS",
 	CHAN:      "CHAN",
 	OF:        "OF",
 	TRUE:      "TRUE",
@@ -135,8 +143,12 @@ var keywords = map[string]TokenType{
 	"WHILE": WHILE,
 	"FOR":   FOR,
 	"PROC":  PROC,
-	"FUNC":  FUNC,
-	"CHAN":  CHAN,
+	"FUNC":     FUNC,
+	"FUNCTION": FUNCTION,
+	"VALOF":    VALOF,
+	"RESULT":   RESULT,
+	"IS":       IS,
+	"CHAN":     CHAN,
 	"OF":    OF,
 	"TRUE":  TRUE,
 	"FALSE": FALSE,

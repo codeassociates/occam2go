@@ -136,6 +136,9 @@ func (p *Parser) parseStatement() ast.Statement {
 
 	switch p.curToken.Type {
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
+		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) {
+			return p.parseFuncDecl()
+		}
 		return p.parseVarDecl()
 	case lexer.LBRACKET:
 		return p.parseArrayDecl()
@@ -785,6 +788,146 @@ func (p *Parser) parseProcCall() *ast.ProcCall {
 	return call
 }
 
+func (p *Parser) parseFuncDecl() *ast.FuncDecl {
+	fn := &ast.FuncDecl{
+		Token:      p.curToken,
+		ReturnType: p.curToken.Literal,
+	}
+
+	// Consume FUNCTION keyword
+	p.nextToken()
+
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	fn.Name = p.curToken.Literal
+
+	if !p.expectPeek(lexer.LPAREN) {
+		return nil
+	}
+
+	fn.Params = p.parseProcParams()
+
+	if !p.expectPeek(lexer.RPAREN) {
+		return nil
+	}
+
+	// Force all params to IsVal = true (occam FUNCTION params are always VAL)
+	for i := range fn.Params {
+		fn.Params[i].IsVal = true
+	}
+
+	// Skip newlines, expect INDENT
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented body after FUNCTION declaration")
+		return fn
+	}
+	p.nextToken() // consume INDENT
+	p.nextToken() // move into body
+
+	// IS form: simple expression return
+	if p.curTokenIs(lexer.IS) {
+		p.nextToken() // move past IS
+		fn.ResultExpr = p.parseExpression(LOWEST)
+
+		// Consume to DEDENT
+		for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
+		return fn
+	}
+
+	// VALOF form: local declarations, then VALOF keyword, then body, then RESULT
+	// Parse local declarations (type keywords before VALOF)
+	for p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+		stmt := p.parseVarDecl()
+		if stmt != nil {
+			fn.Body = append(fn.Body, stmt)
+		}
+		// Advance past NEWLINE
+		for p.peekTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+		p.nextToken()
+	}
+
+	// Expect VALOF keyword
+	if !p.curTokenIs(lexer.VALOF) {
+		p.addError(fmt.Sprintf("expected VALOF or IS in function body, got %s", p.curToken.Type))
+		return fn
+	}
+
+	// Skip newlines and expect INDENT for VALOF body
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after VALOF")
+		return fn
+	}
+	p.nextToken() // consume INDENT
+	p.nextToken() // move into VALOF body
+
+	// Parse the body statement (e.g., SEQ, IF, etc.)
+	bodyStmt := p.parseStatement()
+	if bodyStmt != nil {
+		fn.Body = append(fn.Body, bodyStmt)
+	}
+
+	// Advance past nested DEDENTs/newlines to RESULT
+	for !p.curTokenIs(lexer.RESULT) && !p.curTokenIs(lexer.EOF) {
+		p.nextToken()
+	}
+
+	// Parse RESULT expression
+	if p.curTokenIs(lexer.RESULT) {
+		p.nextToken() // move past RESULT
+		fn.ResultExpr = p.parseExpression(LOWEST)
+	}
+
+	// Consume to the function's DEDENT
+	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+		p.nextToken()
+	}
+
+	return fn
+}
+
+func (p *Parser) parseFuncCallExpr() *ast.FuncCall {
+	call := &ast.FuncCall{
+		Token: p.curToken,
+		Name:  p.curToken.Literal,
+	}
+
+	p.nextToken() // consume (
+
+	if p.peekTokenIs(lexer.RPAREN) {
+		p.nextToken() // consume )
+		return call
+	}
+
+	p.nextToken() // move to first arg
+	call.Args = append(call.Args, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next arg
+		call.Args = append(call.Args, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(lexer.RPAREN) {
+		return nil
+	}
+
+	return call
+}
+
 func (p *Parser) parseWhileLoop() *ast.WhileLoop {
 	loop := &ast.WhileLoop{Token: p.curToken}
 
@@ -828,16 +971,34 @@ func (p *Parser) parseIfStatement() *ast.IfStatement {
 		return stmt
 	}
 	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
 	p.nextToken() // move into block
 
 	// Parse if choices (condition -> body pairs)
-	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+	for !p.curTokenIs(lexer.EOF) {
 		// Skip newlines
 		for p.curTokenIs(lexer.NEWLINE) {
 			p.nextToken()
 		}
 
-		if p.curTokenIs(lexer.DEDENT) {
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return stmt
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
 			break
 		}
 
@@ -854,14 +1015,13 @@ func (p *Parser) parseIfStatement() *ast.IfStatement {
 			p.nextToken() // move to body
 			choice.Body = p.parseStatement()
 
-			// Consume until DEDENT
-			for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			// Advance past the last token of the statement if needed
+			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
 				p.nextToken()
 			}
 		}
 
 		stmt.Choices = append(stmt.Choices, choice)
-		p.nextToken()
 	}
 
 	return stmt
@@ -874,7 +1034,11 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 	switch p.curToken.Type {
 	case lexer.IDENT:
-		left = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		if p.peekTokenIs(lexer.LPAREN) {
+			left = p.parseFuncCallExpr()
+		} else {
+			left = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		}
 	case lexer.INT:
 		val, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 		if err != nil {

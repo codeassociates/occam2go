@@ -130,6 +130,29 @@ type ProcCall struct {
 func (p *ProcCall) statementNode()       {}
 func (p *ProcCall) TokenLiteral() string { return p.Token.Literal }
 
+// FuncDecl represents a function declaration
+type FuncDecl struct {
+	Token      lexer.Token // the return type token
+	ReturnType string      // "INT", "BYTE", "BOOL", "REAL"
+	Name       string
+	Params     []ProcParam
+	Body       []Statement // local decls + body statements (VALOF form), empty for IS form
+	ResultExpr Expression  // the return expression (from IS or RESULT)
+}
+
+func (f *FuncDecl) statementNode()       {}
+func (f *FuncDecl) TokenLiteral() string { return f.Token.Literal }
+
+// FuncCall represents a function call expression
+type FuncCall struct {
+	Token lexer.Token // the function name token
+	Name  string
+	Args  []Expression
+}
+
+func (f *FuncCall) expressionNode()      {}
+func (f *FuncCall) TokenLiteral() string { return f.Token.Literal }
+
 // WhileLoop represents a WHILE loop
 type WhileLoop struct {
 	Token     lexer.Token // the WHILE token
