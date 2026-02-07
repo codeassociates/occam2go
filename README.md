@@ -240,4 +240,161 @@ The sender and receiver must both be ready before the communication occurs. This
 
 3. **Channel arrays**: Occam allows arrays of channels. Not yet implemented.
 
-4. **ALT construct**: Occam's `ALT` maps to Go's `select` statement. Basic ALT and guards are supported. Priority ALT (`PRI ALT`) and replicated ALT are not yet implemented.
+4. **ALT construct**: Occam's `ALT` maps to Go's `select` statement. Basic ALT, guards, and timer timeouts are supported. Priority ALT (`PRI ALT`) and replicated ALT are not yet implemented.
+
+## How PAR is Mapped
+
+Occam's `PAR` construct runs processes truly in parallel. On the Transputer this was hardware-scheduled; in Go it maps to goroutines coordinated with a `sync.WaitGroup`.
+
+### Basic PAR
+
+Each branch of a `PAR` block becomes a goroutine. The transpiler inserts a `WaitGroup` to ensure all branches complete before execution continues:
+
+```occam
+PAR
+  c ! 42
+  c ? x
+```
+
+Generates:
+
+```go
+var wg sync.WaitGroup
+wg.Add(2)
+go func() {
+    defer wg.Done()
+    c <- 42
+}()
+go func() {
+    defer wg.Done()
+    x = <-c
+}()
+wg.Wait()
+```
+
+The `wg.Wait()` call blocks until all goroutines have finished, preserving Occam's semantics that execution only continues after all parallel branches complete.
+
+### Replicated PAR
+
+A replicated `PAR` spawns N concurrent processes using a loop. Each iteration captures the loop variable to avoid closure issues:
+
+```occam
+PAR i = 0 FOR 4
+  c ! i
+```
+
+Generates:
+
+```go
+var wg sync.WaitGroup
+wg.Add(int(4))
+for i := 0; i < 0 + 4; i++ {
+    i := i  // capture loop variable
+    go func() {
+        defer wg.Done()
+        c <- i
+    }()
+}
+wg.Wait()
+```
+
+### Differences and Limitations
+
+1. **Scheduling**: Occam on the Transputer had deterministic, priority-based scheduling. Go's goroutine scheduler is preemptive and non-deterministic. Programs that depend on execution order between `PAR` branches may behave differently.
+
+2. **Shared memory**: Occam enforces at compile time that parallel processes do not share variables (the "disjointness" rule). The transpiler does not enforce this, so generated Go code may contain data races if the original Occam would have been rejected by a full Occam compiler.
+
+3. **PLACED PAR**: Occam's `PLACED PAR` for assigning processes to specific Transputer links or processors is not supported.
+
+## How Timers are Mapped
+
+Occam's `TIMER` provides access to a hardware clock. The transpiler maps timer operations to Go's `time` package.
+
+### Timer Declaration
+
+Timer declarations are no-ops in the generated code since Go accesses time through the `time` package directly:
+
+```occam
+TIMER tim:
+```
+
+Generates:
+
+```go
+// TIMER tim
+```
+
+### Reading the Current Time
+
+A timer read stores the current time as an integer (microseconds since epoch):
+
+```occam
+TIMER tim:
+INT t:
+tim ? t
+```
+
+Generates:
+
+```go
+// TIMER tim
+var t int
+t = int(time.Now().UnixMicro())
+```
+
+### Timer Timeouts in ALT
+
+Timer cases in ALT allow a process to wait until a deadline. This maps to Go's `time.After` inside a `select`:
+
+```occam
+TIMER tim:
+INT t:
+tim ? t
+ALT
+  c ? x
+    process(x)
+  tim ? AFTER (t + 100000)
+    handle.timeout()
+```
+
+Generates:
+
+```go
+// TIMER tim
+var t int
+t = int(time.Now().UnixMicro())
+select {
+case x = <-c:
+    process(x)
+case <-time.After(time.Duration((t + 100000) - int(time.Now().UnixMicro())) * time.Microsecond):
+    handle_timeout()
+}
+```
+
+The deadline expression `(t + 100000)` represents an absolute time. The generated code computes the remaining duration by subtracting the current time.
+
+### AFTER as a Boolean Expression
+
+The `AFTER` operator compares two time values and evaluates to `true` if the left operand is later than the right. It maps to `>`:
+
+```occam
+IF
+  t2 AFTER t1
+    -- t2 is later
+```
+
+Generates:
+
+```go
+if (t2 > t1) {
+    // t2 is later
+}
+```
+
+### Differences and Limitations
+
+1. **Clock resolution**: Occam timers are hardware-dependent (often microsecond resolution on the Transputer). The transpiler uses `time.Now().UnixMicro()` for microsecond values, but actual resolution depends on the OS.
+
+2. **Guarded timer ALT**: `guard & tim ? AFTER deadline` (timer cases with boolean guards) is not yet supported.
+
+3. **Clock wraparound**: Occam's `AFTER` operator handles 32-bit clock wraparound correctly. The transpiler uses a simple `>` comparison, which does not handle wraparound.
