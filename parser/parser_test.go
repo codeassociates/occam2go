@@ -910,6 +910,89 @@ func TestAfterExpression(t *testing.T) {
 	}
 }
 
+func TestChanParam(t *testing.T) {
+	input := `PROC worker(CHAN OF INT input)
+  SEQ
+    INT x:
+    input ? x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(proc.Params))
+	}
+
+	param := proc.Params[0]
+	if !param.IsChan {
+		t.Errorf("expected IsChan=true")
+	}
+	if param.ChanElemType != "INT" {
+		t.Errorf("expected ChanElemType=INT, got %s", param.ChanElemType)
+	}
+	if param.Name != "input" {
+		t.Errorf("expected Name=input, got %s", param.Name)
+	}
+}
+
+func TestChanParamMixed(t *testing.T) {
+	input := `PROC foo(CHAN OF INT c, VAL INT x)
+  SEQ
+    c ! x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(proc.Params))
+	}
+
+	// First param: CHAN OF INT c
+	p0 := proc.Params[0]
+	if !p0.IsChan {
+		t.Errorf("param 0: expected IsChan=true")
+	}
+	if p0.ChanElemType != "INT" {
+		t.Errorf("param 0: expected ChanElemType=INT, got %s", p0.ChanElemType)
+	}
+	if p0.Name != "c" {
+		t.Errorf("param 0: expected Name=c, got %s", p0.Name)
+	}
+
+	// Second param: VAL INT x
+	p1 := proc.Params[1]
+	if p1.IsChan {
+		t.Errorf("param 1: expected IsChan=false")
+	}
+	if !p1.IsVal {
+		t.Errorf("param 1: expected IsVal=true")
+	}
+	if p1.Type != "INT" {
+		t.Errorf("param 1: expected Type=INT, got %s", p1.Type)
+	}
+	if p1.Name != "x" {
+		t.Errorf("param 1: expected Name=x, got %s", p1.Name)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

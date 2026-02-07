@@ -792,14 +792,30 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Expect type
-		if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-			!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
-			p.addError(fmt.Sprintf("expected type in parameter, got %s", p.curToken.Type))
-			return params
+		// Check for CHAN OF <type>
+		if p.curTokenIs(lexer.CHAN) {
+			param.IsChan = true
+			if !p.expectPeek(lexer.OF) {
+				return params
+			}
+			p.nextToken() // move to element type
+			if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+				p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+				return params
+			}
+			param.ChanElemType = p.curToken.Literal
+			p.nextToken()
+		} else {
+			// Expect scalar type
+			if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+				p.addError(fmt.Sprintf("expected type in parameter, got %s", p.curToken.Type))
+				return params
+			}
+			param.Type = p.curToken.Literal
+			p.nextToken()
 		}
-		param.Type = p.curToken.Literal
-		p.nextToken()
 
 		// Expect identifier
 		if !p.curTokenIs(lexer.IDENT) {

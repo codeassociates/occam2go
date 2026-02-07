@@ -115,9 +115,11 @@ func (p *ProcDecl) TokenLiteral() string { return p.Token.Literal }
 
 // ProcParam represents a procedure parameter
 type ProcParam struct {
-	IsVal bool   // VAL parameter (pass by value)
-	Type  string // INT, BYTE, BOOL, etc.
-	Name  string
+	IsVal        bool   // VAL parameter (pass by value)
+	Type         string // INT, BYTE, BOOL, etc.
+	Name         string
+	IsChan       bool   // true if this is a CHAN OF <type> parameter
+	ChanElemType string // element type when IsChan (e.g., "INT")
 }
 
 // ProcCall represents a procedure call

@@ -533,7 +533,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	oldRefParams := g.refParams
 	g.refParams = make(map[string]bool)
 	for _, p := range proc.Params {
-		if !p.IsVal {
+		if !p.IsVal && !p.IsChan {
 			g.refParams[p.Name] = true
 		}
 	}
@@ -558,10 +558,15 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 	var parts []string
 	for _, p := range params {
-		goType := g.occamTypeToGo(p.Type)
-		if !p.IsVal {
-			// Non-VAL parameters are pass by reference in Occam
-			goType = "*" + goType
+		var goType string
+		if p.IsChan {
+			goType = "chan " + g.occamTypeToGo(p.ChanElemType)
+		} else {
+			goType = g.occamTypeToGo(p.Type)
+			if !p.IsVal {
+				// Non-VAL parameters are pass by reference in Occam
+				goType = "*" + goType
+			}
 		}
 		parts = append(parts, fmt.Sprintf("%s %s", p.Name, goType))
 	}
@@ -587,7 +592,8 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 			g.write(", ")
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
-		if i < len(params) && !params[i].IsVal {
+		// Channels are already reference types, so no & needed
+		if i < len(params) && !params[i].IsVal && !params[i].IsChan {
 			g.write("&")
 		}
 		g.generateExpression(arg)

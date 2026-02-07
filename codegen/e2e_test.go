@@ -771,6 +771,51 @@ func TestE2E_TimerAltTimeout(t *testing.T) {
 	}
 }
 
+func TestE2E_ChanParam(t *testing.T) {
+	occam := `PROC sender(CHAN OF INT output)
+  output ! 42
+
+SEQ
+  CHAN OF INT c:
+  PAR
+    sender(c)
+    SEQ
+      INT x:
+      c ? x
+      print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChanParamTwoWay(t *testing.T) {
+	occam := `PROC doubler(CHAN OF INT input, CHAN OF INT output)
+  SEQ
+    INT x:
+    input ? x
+    output ! x * 2
+
+SEQ
+  CHAN OF INT inCh:
+  CHAN OF INT outCh:
+  PAR
+    doubler(inCh, outCh)
+    SEQ
+      inCh ! 21
+      INT result:
+      outCh ? result
+      print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_AfterExpression(t *testing.T) {
 	// Test AFTER as a boolean expression in IF
 	occam := `SEQ
