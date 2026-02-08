@@ -164,6 +164,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseAltBlock()
 	case lexer.SKIP:
 		return &ast.Skip{Token: p.curToken}
+	case lexer.STOP:
+		return &ast.Stop{Token: p.curToken}
 	case lexer.PROC:
 		return p.parseProcDecl()
 	case lexer.WHILE:

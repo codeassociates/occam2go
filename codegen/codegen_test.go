@@ -212,6 +212,21 @@ func TestStringLiteral(t *testing.T) {
 	}
 }
 
+func TestStop(t *testing.T) {
+	input := "STOP\n"
+	output := transpile(t, input)
+
+	if !strings.Contains(output, `fmt.Fprintln(os.Stderr, "STOP encountered")`) {
+		t.Errorf("expected fmt.Fprintln(os.Stderr, ...) in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "select {}") {
+		t.Errorf("expected 'select {}' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"os"`) {
+		t.Errorf("expected os import in output, got:\n%s", output)
+	}
+}
+
 func TestStringLiteralInProcCall(t *testing.T) {
 	input := `print.string("hello")
 `

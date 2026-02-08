@@ -102,6 +102,14 @@ type Skip struct {
 func (s *Skip) statementNode()       {}
 func (s *Skip) TokenLiteral() string { return s.Token.Literal }
 
+// Stop represents the STOP statement (deadlock/halt)
+type Stop struct {
+	Token lexer.Token
+}
+
+func (s *Stop) statementNode()       {}
+func (s *Stop) TokenLiteral() string { return s.Token.Literal }
+
 // ProcDecl represents a procedure declaration
 type ProcDecl struct {
 	Token  lexer.Token // the PROC token

@@ -51,6 +51,7 @@ Four packages, one pipeline:
 | `IF` (multi-branch) | `if / else if` chain |
 | `WHILE cond` | `for cond` |
 | `CASE x` | `switch x` |
+| `STOP` | `fmt.Fprintln(os.Stderr, ...)` + `select {}` |
 | `ALT` | `select` |
 | `CHAN OF INT c:` | `c := make(chan int)` |
 | `c ! expr` | `c <- expr` |
@@ -96,8 +97,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, string literals, built-in print procedures.
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, string literals, built-in print procedures.
 
 ## Not Yet Implemented
 
-STOP, type conversions, record types, channel arrays (`[n]CHAN OF TYPE`), protocols, channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+Type conversions, record types, channel arrays (`[n]CHAN OF TYPE`), protocols, channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.

@@ -894,6 +894,24 @@ func TestE2E_RightShift(t *testing.T) {
 	}
 }
 
+func TestE2E_StopNotTaken(t *testing.T) {
+	// Test STOP in an IF branch that is NOT taken — program completes normally
+	occam := `SEQ
+  INT x:
+  x := 1
+  IF
+    x = 0
+      STOP
+    TRUE
+      print.int(42)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_AfterExpression(t *testing.T) {
 	// Test AFTER as a boolean expression in IF
 	occam := `SEQ

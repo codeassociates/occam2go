@@ -14,6 +14,7 @@ type Generator struct {
 	needSync bool // track if we need sync package import
 	needFmt  bool // track if we need fmt package import
 	needTime bool // track if we need time package import
+	needOs   bool // track if we need os package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -40,6 +41,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needSync = false
 	g.needFmt = false
 	g.needTime = false
+	g.needOs = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 
@@ -54,6 +56,10 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if g.containsTimer(stmt) {
 			g.needTime = true
 		}
+		if g.containsStop(stmt) {
+			g.needOs = true
+			g.needFmt = true
+		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
 		}
@@ -67,11 +73,14 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt || g.needTime {
+	if g.needSync || g.needFmt || g.needTime || g.needOs {
 		g.writeLine("import (")
 		g.indent++
 		if g.needFmt {
 			g.writeLine(`"fmt"`)
+		}
+		if g.needOs {
+			g.writeLine(`"os"`)
 		}
 		if g.needSync {
 			g.writeLine(`"sync"`)
@@ -269,6 +278,58 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 	return false
 }
 
+func (g *Generator) containsStop(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.Stop:
+		return true
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsStop(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsStop(inner) {
+				return true
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsStop(c.Body) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		if s.Body != nil && g.containsStop(s.Body) {
+			return true
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsStop(inner) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		if s.Body != nil && g.containsStop(s.Body) {
+			return true
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsStop(choice.Body) {
+				return true
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil && g.containsStop(choice.Body) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (g *Generator) writeLine(s string) {
 	if s == "" {
 		g.builder.WriteString("\n")
@@ -305,6 +366,9 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateAltBlock(s)
 	case *ast.Skip:
 		g.writeLine("// SKIP")
+	case *ast.Stop:
+		g.writeLine(`fmt.Fprintln(os.Stderr, "STOP encountered")`)
+		g.writeLine("select {}")
 	case *ast.ProcDecl:
 		g.generateProcDecl(s)
 	case *ast.FuncDecl:

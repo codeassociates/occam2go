@@ -92,6 +92,7 @@ See [TODO.md](TODO.md) for the full implementation status and roadmap.
 | `PAR` | Goroutines with `sync.WaitGroup` |
 | `IF` | `if / else if` |
 | `WHILE` | `for` loop |
+| `STOP` | Print to stderr + `select {}` (deadlock) |
 | `PROC` with `VAL` params | Functions with value/pointer params |
 | `:=` assignment | `=` assignment |
 | Arithmetic: `+`, `-`, `*`, `/`, `\` | `+`, `-`, `*`, `/`, `%` |

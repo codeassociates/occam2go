@@ -42,7 +42,7 @@
 
 | Feature | Notes |
 |---------|-------|
-| **STOP** | Token exists in lexer but not parsed. Occam's deadlock/termination primitive. |
+| ~~**STOP**~~ | Implemented. Maps to `fmt.Fprintln(os.Stderr, "STOP encountered")` + `select {}`. |
 | ~~**Bitwise operators**~~ | Implemented. `/\` (AND), `\/` (OR), `><` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift). |
 | **Type conversions** | No explicit casting (e.g., `INT x` converting BYTE to INT). |
 
@@ -76,7 +76,7 @@
 ## Suggested Priority
 
 1. **Channel arrays** — Essential for scalable concurrent patterns (e.g., worker pools with replicated PAR)
-2. **STOP** — Simple to add, completes the process algebra primitives
-3. **Bitwise operators** — Needed for systems-level programs
+2. ~~**STOP**~~ — Implemented
+3. ~~**Bitwise operators**~~ — Implemented
 4. **Protocols** — Needed for realistic multi-message channel communication
 5. **Record types** — Needed for structured data
