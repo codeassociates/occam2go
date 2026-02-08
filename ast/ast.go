@@ -262,6 +262,16 @@ type UnaryExpr struct {
 func (ue *UnaryExpr) expressionNode()      {}
 func (ue *UnaryExpr) TokenLiteral() string { return ue.Token.Literal }
 
+// TypeConversion represents a type conversion expression: INT x, BYTE n, etc.
+type TypeConversion struct {
+	Token      lexer.Token // the type token (INT, BYTE, etc.)
+	TargetType string      // "INT", "BYTE", "BOOL", "REAL"
+	Expr       Expression  // the expression to convert
+}
+
+func (tc *TypeConversion) expressionNode()      {}
+func (tc *TypeConversion) TokenLiteral() string { return tc.Token.Literal }
+
 // ParenExpr represents a parenthesized expression
 type ParenExpr struct {
 	Token lexer.Token

@@ -993,6 +993,74 @@ func TestChanParamMixed(t *testing.T) {
 	}
 }
 
+func TestTypeConversion(t *testing.T) {
+	input := `x := INT y
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	tc, ok := assign.Value.(*ast.TypeConversion)
+	if !ok {
+		t.Fatalf("expected TypeConversion, got %T", assign.Value)
+	}
+
+	if tc.TargetType != "INT" {
+		t.Errorf("expected TargetType INT, got %s", tc.TargetType)
+	}
+
+	ident, ok := tc.Expr.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier inside TypeConversion, got %T", tc.Expr)
+	}
+	if ident.Value != "y" {
+		t.Errorf("expected 'y', got %s", ident.Value)
+	}
+}
+
+func TestTypeConversionInExpression(t *testing.T) {
+	input := `x := INT y + 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	// Should be: (INT y) + 1 due to PREFIX precedence
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	if binExpr.Operator != "+" {
+		t.Errorf("expected +, got %s", binExpr.Operator)
+	}
+
+	tc, ok := binExpr.Left.(*ast.TypeConversion)
+	if !ok {
+		t.Fatalf("expected TypeConversion on left, got %T", binExpr.Left)
+	}
+
+	if tc.TargetType != "INT" {
+		t.Errorf("expected TargetType INT, got %s", tc.TargetType)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

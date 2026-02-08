@@ -100,6 +100,7 @@ See [TODO.md](TODO.md) for the full implementation status and roadmap.
 | Logic: `AND`, `OR`, `NOT` | `&&`, `\|\|`, `!` |
 | Bitwise: `/\`, `\/`, `><`, `~` | `&`, `\|`, `^`, `^` (AND, OR, XOR, NOT) |
 | Shifts: `<<`, `>>` | `<<`, `>>` |
+| Type conversions: `INT x`, `BYTE n` | `int(x)`, `byte(n)` |
 
 ### Channels
 

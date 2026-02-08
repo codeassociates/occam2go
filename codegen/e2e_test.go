@@ -912,6 +912,51 @@ func TestE2E_StopNotTaken(t *testing.T) {
 	}
 }
 
+func TestE2E_TypeConversionIntFromByte(t *testing.T) {
+	occam := `SEQ
+  BYTE b:
+  b := 65
+  INT x:
+  x := INT b
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "65\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_TypeConversionByteFromInt(t *testing.T) {
+	occam := `SEQ
+  INT n:
+  n := 72
+  BYTE b:
+  b := BYTE n
+  print.int(INT b)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "72\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_TypeConversionInExpression(t *testing.T) {
+	occam := `SEQ
+  BYTE b:
+  b := 10
+  INT x:
+  x := INT b + 1
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "11\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_AfterExpression(t *testing.T) {
 	// Test AFTER as a boolean expression in IF
 	occam := `SEQ

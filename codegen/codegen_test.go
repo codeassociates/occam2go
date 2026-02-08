@@ -227,6 +227,25 @@ func TestStop(t *testing.T) {
 	}
 }
 
+func TestTypeConversion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x := INT y\n", "x = int(y)"},
+		{"x := BYTE n\n", "x = byte(n)"},
+		{"x := REAL count\n", "x = float64(count)"},
+		{"x := BOOL flag\n", "x = bool(flag)"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
+
 func TestStringLiteralInProcCall(t *testing.T) {
 	input := `print.string("hello")
 `

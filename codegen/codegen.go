@@ -812,6 +812,11 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write("]")
 	case *ast.FuncCall:
 		g.generateFuncCallExpr(e)
+	case *ast.TypeConversion:
+		g.write(g.occamTypeToGo(e.TargetType))
+		g.write("(")
+		g.generateExpression(e.Expr)
+		g.write(")")
 	}
 }
 

@@ -1251,6 +1251,14 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Operator: "~",
 			Right:    p.parseExpression(PREFIX),
 		}
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
+		token := p.curToken
+		p.nextToken()
+		left = &ast.TypeConversion{
+			Token:      token,
+			TargetType: token.Literal,
+			Expr:       p.parseExpression(PREFIX),
+		}
 	default:
 		p.addError(fmt.Sprintf("unexpected token in expression: %s", p.curToken.Type))
 		return nil

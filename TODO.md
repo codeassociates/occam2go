@@ -44,7 +44,7 @@
 |---------|-------|
 | ~~**STOP**~~ | Implemented. Maps to `fmt.Fprintln(os.Stderr, "STOP encountered")` + `select {}`. |
 | ~~**Bitwise operators**~~ | Implemented. `/\` (AND), `\/` (OR), `><` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift). |
-| **Type conversions** | No explicit casting (e.g., `INT x` converting BYTE to INT). |
+| ~~**Type conversions**~~ | Implemented. `INT x` → `int(x)`, `BYTE n` → `byte(n)`, `REAL x` → `float64(x)`. |
 
 ### Data Structures
 

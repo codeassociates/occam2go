@@ -61,6 +61,7 @@ Four packages, one pipeline:
 | `TIMER` / `tim ? t` | `time.Now().UnixMicro()` |
 | `=` / `<>` | `==` / `!=` |
 | `AND` / `OR` / `NOT` | `&&` / `||` / `!` |
+| `INT expr`, `BYTE expr`, etc. | `int(expr)`, `byte(expr)`, etc. (type conversions) |
 | `\` (modulo) | `%` |
 | `/\` / `\/` / `><` | `&` / `\|` / `^` (bitwise AND/OR/XOR) |
 | `~` | `^` (bitwise NOT) |
@@ -82,7 +83,7 @@ Four packages, one pipeline:
 
 ### Expression Parsing
 - Pratt parser with precedence levels: OR < AND < EQUALS < COMPARISON < SUM < PRODUCT < PREFIX < INDEX
-- `parseExpression()` handles prefix (IDENT, INT, STRING, TRUE/FALSE, LPAREN, MINUS, NOT, BITNOT) then infix loop
+- `parseExpression()` handles prefix (IDENT, INT, STRING, TRUE/FALSE, LPAREN, MINUS, NOT, BITNOT, INT_TYPE/BYTE_TYPE/BOOL_TYPE/REAL_TYPE for type conversions) then infix loop
 - Function calls detected by `IDENT` followed by `LPAREN`
 
 ## Adding a New Feature
@@ -97,8 +98,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, string literals, built-in print procedures.
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures.
 
 ## Not Yet Implemented
 
-Type conversions, record types, channel arrays (`[n]CHAN OF TYPE`), protocols, channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+Record types, channel arrays (`[n]CHAN OF TYPE`), protocols, channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
