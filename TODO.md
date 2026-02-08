@@ -32,6 +32,7 @@
 - **AFTER** — As boolean expression (maps to `>`)
 - **Parenthesized expressions**
 - **Array indexing** — `arr[i]`, `arr[expr]`
+- **String literals** — Double-quoted strings, usable in expressions, assignments, and channel communication
 
 ---
 
@@ -42,7 +43,6 @@
 | Feature | Notes |
 |---------|-------|
 | **STOP** | Token exists in lexer but not parsed. Occam's deadlock/termination primitive. |
-| **String literals** | Token type exists but no expression parsing or codegen. Only `print.string("...")` works as a built-in special case. |
 | **Bitwise operators** | No bitwise AND, OR, XOR, or shift operators. |
 | **Type conversions** | No explicit casting (e.g., `INT x` converting BYTE to INT). |
 
@@ -75,9 +75,8 @@
 
 ## Suggested Priority
 
-1. **String literals** — Unlocks text processing programs
-2. **Channel arrays** — Essential for scalable concurrent patterns (e.g., worker pools with replicated PAR)
-3. **STOP** — Simple to add, completes the process algebra primitives
-4. **Bitwise operators** — Needed for systems-level programs
-5. **Protocols** — Needed for realistic multi-message channel communication
-6. **Record types** — Needed for structured data
+1. **Channel arrays** — Essential for scalable concurrent patterns (e.g., worker pools with replicated PAR)
+2. **STOP** — Simple to add, completes the process algebra primitives
+3. **Bitwise operators** — Needed for systems-level programs
+4. **Protocols** — Needed for realistic multi-message channel communication
+5. **Record types** — Needed for structured data

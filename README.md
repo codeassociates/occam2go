@@ -83,6 +83,8 @@ func main() {
 
 ## Implemented Features
 
+See [TODO.md](TODO.md) for the full implementation status and roadmap.
+
 | Occam | Go |
 |-------|-----|
 | `INT`, `BYTE`, `BOOL`, `REAL` | `int`, `byte`, `bool`, `float64` |
