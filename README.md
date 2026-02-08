@@ -109,6 +109,10 @@ See [TODO.md](TODO.md) for the full implementation status and roadmap.
 | `CHAN OF INT c:` | `c := make(chan int)` |
 | `c ! x` (send) | `c <- x` |
 | `c ? y` (receive) | `y = <-c` |
+| `[5]CHAN OF INT cs:` | `cs := make([]chan int, 5)` + init loop |
+| `cs[i] ! x` (indexed send) | `cs[i] <- x` |
+| `cs[i] ? y` (indexed receive) | `y = <-cs[i]` |
+| `PROC f([]CHAN OF INT cs)` | `func f(cs []chan int)` |
 
 Example:
 ```occam
@@ -119,6 +123,22 @@ SEQ
     c ! 42
     c ? result
   print.int(result)
+```
+
+Channel array example:
+```occam
+SEQ
+  [3]CHAN OF INT cs:
+  INT sum:
+  sum := 0
+  PAR
+    PAR i = 0 FOR 3
+      cs[i] ! (i + 1) * 10
+    SEQ i = 0 FOR 3
+      INT x:
+      cs[i] ? x
+      sum := sum + x
+  print.int(sum)
 ```
 
 ### Protocols
@@ -314,7 +334,7 @@ The sender and receiver must both be ready before the communication occurs. This
 
 2. **Protocol types**: Simple, sequential, and variant protocols are supported. Nested protocols (protocols referencing other protocols) are not yet supported.
 
-3. **Channel arrays**: Occam allows arrays of channels. Not yet implemented.
+3. **Channel arrays**: Channel arrays (`[n]CHAN OF TYPE`) are supported, including indexed send/receive, `[]CHAN OF TYPE` proc params, and ALT with indexed channels.
 
 4. **ALT construct**: Occam's `ALT` maps to Go's `select` statement. Basic ALT, guards, and timer timeouts are supported. Priority ALT (`PRI ALT`) and replicated ALT are not yet implemented.
 

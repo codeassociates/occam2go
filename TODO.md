@@ -16,6 +16,7 @@
 - **Variable declarations** — `INT x, y, z:`
 - **Arrays** — `[n]TYPE arr:` with index expressions
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`)
+- **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive and `[]CHAN OF TYPE` proc params
 - **Timers** — `TIMER tim:` with reads and `AFTER` expressions
 
 ### Procedures & Functions
@@ -51,7 +52,7 @@
 | Feature | Notes |
 |---------|-------|
 | ~~**Record types**~~ | Implemented. `RECORD POINT { INT x: INT y: }` → `type POINT struct { x int; y int }`. Field access via bracket syntax (`p[x]` → `p.x`). |
-| **Channel arrays** | `[n]CHAN OF TYPE` — only scalar channel declarations work. |
+| ~~**Channel arrays**~~ | Implemented. `[n]CHAN OF TYPE cs:` → `make([]chan T, n)` + init loop. Indexed send/receive (`cs[i] ! x`, `cs[i] ? x`), `[]CHAN OF TYPE` proc params, and ALT with indexed channels. |
 | **REAL32 / REAL64** | Only a single REAL type exists. Occam distinguishes the two. |
 
 ### Channel & Protocol Features
@@ -75,7 +76,7 @@
 
 ## Suggested Priority
 
-1. **Channel arrays** — Essential for scalable concurrent patterns (e.g., worker pools with replicated PAR)
+1. ~~**Channel arrays**~~ — Implemented
 2. ~~**STOP**~~ — Implemented
 3. ~~**Bitwise operators**~~ — Implemented
 4. ~~**Protocols**~~ — Implemented
