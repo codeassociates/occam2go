@@ -25,6 +25,10 @@ type Generator struct {
 	protocolDefs  map[string]*ast.ProtocolDecl
 	chanProtocols map[string]string // channel name → protocol name
 	tmpCounter    int               // for unique temp variable names
+
+	// Record support
+	recordDefs map[string]*ast.RecordDecl
+	recordVars map[string]string // variable name → record type name
 }
 
 // Built-in print procedures
@@ -52,6 +56,8 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
 	g.chanProtocols = make(map[string]string)
 	g.tmpCounter = 0
+	g.recordDefs = make(map[string]*ast.RecordDecl)
+	g.recordVars = make(map[string]string)
 
 	// First pass: collect procedure signatures, protocols, and check for PAR/print
 	for _, stmt := range program.Statements {
@@ -77,7 +83,11 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if proto, ok := stmt.(*ast.ProtocolDecl); ok {
 			g.protocolDefs[proto.Name] = proto
 		}
+		if rec, ok := stmt.(*ast.RecordDecl); ok {
+			g.recordDefs[rec.Name] = rec
+		}
 		g.collectChanProtocols(stmt)
+		g.collectRecordVars(stmt)
 	}
 
 	// Write package declaration
@@ -105,15 +115,15 @@ func (g *Generator) Generate(program *ast.Program) string {
 		g.writeLine("")
 	}
 
-	// Separate protocol, procedure declarations from other statements
-	var protocolDecls []ast.Statement
+	// Separate protocol, record, procedure declarations from other statements
+	var typeDecls []ast.Statement
 	var procDecls []ast.Statement
 	var mainStatements []ast.Statement
 
 	for _, stmt := range program.Statements {
 		switch stmt.(type) {
-		case *ast.ProtocolDecl:
-			protocolDecls = append(protocolDecls, stmt)
+		case *ast.ProtocolDecl, *ast.RecordDecl:
+			typeDecls = append(typeDecls, stmt)
 		case *ast.ProcDecl, *ast.FuncDecl:
 			procDecls = append(procDecls, stmt)
 		default:
@@ -121,8 +131,8 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 	}
 
-	// Generate protocol type definitions first (at package level)
-	for _, stmt := range protocolDecls {
+	// Generate type definitions first (at package level)
+	for _, stmt := range typeDecls {
 		g.generateStatement(stmt)
 	}
 
@@ -433,6 +443,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateProtocolDecl(s)
 	case *ast.VariantReceive:
 		g.generateVariantReceive(s)
+	case *ast.RecordDecl:
+		g.generateRecordDecl(s)
 	}
 }
 
@@ -656,6 +668,74 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 	}
 }
 
+func (g *Generator) collectRecordVars(stmt ast.Statement) {
+	switch s := stmt.(type) {
+	case *ast.VarDecl:
+		if _, ok := g.recordDefs[s.Type]; ok {
+			for _, name := range s.Names {
+				g.recordVars[name] = s.Type
+			}
+		}
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			g.collectRecordVars(inner)
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			g.collectRecordVars(inner)
+		}
+	case *ast.ProcDecl:
+		for _, p := range s.Params {
+			if !p.IsChan {
+				if _, ok := g.recordDefs[p.Type]; ok {
+					g.recordVars[p.Name] = p.Type
+				}
+			}
+		}
+		if s.Body != nil {
+			g.collectRecordVars(s.Body)
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			g.collectRecordVars(inner)
+		}
+	case *ast.WhileLoop:
+		if s.Body != nil {
+			g.collectRecordVars(s.Body)
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil {
+				g.collectRecordVars(choice.Body)
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil {
+				g.collectRecordVars(choice.Body)
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil {
+				g.collectRecordVars(c.Body)
+			}
+		}
+	}
+}
+
+func (g *Generator) generateRecordDecl(rec *ast.RecordDecl) {
+	g.writeLine(fmt.Sprintf("type %s struct {", rec.Name))
+	g.indent++
+	for _, f := range rec.Fields {
+		goType := g.occamTypeToGoBase(f.Type)
+		g.writeLine(fmt.Sprintf("%s %s", f.Name, goType))
+	}
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+}
+
 // occamTypeToGoBase converts a type name without checking protocol defs
 // (used inside protocol generation to avoid infinite recursion)
 func (g *Generator) occamTypeToGoBase(occamType string) string {
@@ -688,21 +768,45 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 		if _, ok := g.protocolDefs[occamType]; ok {
 			return "_proto_" + occamType
 		}
+		// Check if it's a record type name
+		if _, ok := g.recordDefs[occamType]; ok {
+			return occamType
+		}
 		return occamType // pass through unknown types
 	}
 }
 
 func (g *Generator) generateAssignment(assign *ast.Assignment) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	// Dereference if assigning to a reference parameter
-	if g.refParams[assign.Name] {
-		g.write("*")
-	}
-	g.write(assign.Name)
+
 	if assign.Index != nil {
+		// Check if this is a record field access
+		if _, ok := g.recordVars[assign.Name]; ok {
+			if ident, ok := assign.Index.(*ast.Identifier); ok {
+				// Record field: p.x = value (Go auto-dereferences pointers)
+				g.write(assign.Name)
+				g.write(".")
+				g.write(ident.Value)
+				g.write(" = ")
+				g.generateExpression(assign.Value)
+				g.write("\n")
+				return
+			}
+		}
+		// Array index: dereference if ref param
+		if g.refParams[assign.Name] {
+			g.write("*")
+		}
+		g.write(assign.Name)
 		g.write("[")
 		g.generateExpression(assign.Index)
 		g.write("]")
+	} else {
+		// Simple assignment: dereference if ref param
+		if g.refParams[assign.Name] {
+			g.write("*")
+		}
+		g.write(assign.Name)
 	}
 	g.write(" = ")
 	g.generateExpression(assign.Value)
@@ -849,6 +953,12 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		if p.IsChan {
 			if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 				g.chanProtocols[p.Name] = p.ChanElemType
+			}
+		}
+		// Register record-typed params
+		if !p.IsChan {
+			if _, ok := g.recordDefs[p.Type]; ok {
+				g.recordVars[p.Name] = p.Type
 			}
 		}
 	}
@@ -1057,6 +1167,17 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.generateExpression(e.Expr)
 		g.write(")")
 	case *ast.IndexExpr:
+		// Check if this is a record field access
+		if ident, ok := e.Left.(*ast.Identifier); ok {
+			if _, ok := g.recordVars[ident.Value]; ok {
+				if field, ok := e.Index.(*ast.Identifier); ok {
+					g.generateExpression(e.Left)
+					g.write(".")
+					g.write(field.Value)
+					break
+				}
+			}
+		}
 		g.generateExpression(e.Left)
 		g.write("[")
 		g.generateExpression(e.Index)

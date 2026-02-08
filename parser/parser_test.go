@@ -1327,6 +1327,182 @@ func TestSequentialSend(t *testing.T) {
 	}
 }
 
+func TestRecordDecl(t *testing.T) {
+	input := `RECORD POINT
+  INT x:
+  INT y:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	rec, ok := program.Statements[0].(*ast.RecordDecl)
+	if !ok {
+		t.Fatalf("expected RecordDecl, got %T", program.Statements[0])
+	}
+
+	if rec.Name != "POINT" {
+		t.Errorf("expected name 'POINT', got %s", rec.Name)
+	}
+
+	if len(rec.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(rec.Fields))
+	}
+
+	if rec.Fields[0].Type != "INT" || rec.Fields[0].Name != "x" {
+		t.Errorf("expected field 0: INT x, got %s %s", rec.Fields[0].Type, rec.Fields[0].Name)
+	}
+
+	if rec.Fields[1].Type != "INT" || rec.Fields[1].Name != "y" {
+		t.Errorf("expected field 1: INT y, got %s %s", rec.Fields[1].Type, rec.Fields[1].Name)
+	}
+}
+
+func TestRecordDeclMultipleFieldNames(t *testing.T) {
+	input := `RECORD R
+  INT a, b:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	rec, ok := program.Statements[0].(*ast.RecordDecl)
+	if !ok {
+		t.Fatalf("expected RecordDecl, got %T", program.Statements[0])
+	}
+
+	if len(rec.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(rec.Fields))
+	}
+
+	if rec.Fields[0].Type != "INT" || rec.Fields[0].Name != "a" {
+		t.Errorf("expected field 0: INT a, got %s %s", rec.Fields[0].Type, rec.Fields[0].Name)
+	}
+
+	if rec.Fields[1].Type != "INT" || rec.Fields[1].Name != "b" {
+		t.Errorf("expected field 1: INT b, got %s %s", rec.Fields[1].Type, rec.Fields[1].Name)
+	}
+}
+
+func TestRecordVarDecl(t *testing.T) {
+	input := `RECORD POINT
+  INT x:
+  INT y:
+POINT p:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(program.Statements))
+	}
+
+	varDecl, ok := program.Statements[1].(*ast.VarDecl)
+	if !ok {
+		t.Fatalf("expected VarDecl, got %T", program.Statements[1])
+	}
+
+	if varDecl.Type != "POINT" {
+		t.Errorf("expected type 'POINT', got %s", varDecl.Type)
+	}
+
+	if len(varDecl.Names) != 1 || varDecl.Names[0] != "p" {
+		t.Errorf("expected name 'p', got %v", varDecl.Names)
+	}
+}
+
+func TestRecordFieldAssignment(t *testing.T) {
+	// Record field assignment uses bracket syntax, same as indexed assignment
+	input := `p[x] := 5
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assign.Name != "p" {
+		t.Errorf("expected name 'p', got %s", assign.Name)
+	}
+
+	if assign.Index == nil {
+		t.Fatal("expected index expression, got nil")
+	}
+
+	ident, ok := assign.Index.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for index, got %T", assign.Index)
+	}
+	if ident.Value != "x" {
+		t.Errorf("expected index 'x', got %s", ident.Value)
+	}
+}
+
+func TestRecordFieldAccess(t *testing.T) {
+	// Record field access in expression uses bracket syntax
+	input := `val := p[x] + 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	indexExpr, ok := binExpr.Left.(*ast.IndexExpr)
+	if !ok {
+		t.Fatalf("expected IndexExpr on left, got %T", binExpr.Left)
+	}
+
+	left, ok := indexExpr.Left.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier in IndexExpr, got %T", indexExpr.Left)
+	}
+	if left.Value != "p" {
+		t.Errorf("expected 'p', got %s", left.Value)
+	}
+
+	idx, ok := indexExpr.Index.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for index, got %T", indexExpr.Index)
+	}
+	if idx.Value != "x" {
+		t.Errorf("expected 'x', got %s", idx.Value)
+	}
+}
+
 func TestSequentialReceive(t *testing.T) {
 	input := `c ? x ; y
 `

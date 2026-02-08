@@ -167,6 +167,30 @@ SEQ
         SKIP
 ```
 
+### Records
+
+| Occam | Go |
+|-------|-----|
+| `RECORD POINT` with `INT x:` `INT y:` | `type POINT struct { x int; y int }` |
+| `POINT p:` | `var p POINT` |
+| `p[x] := 10` | `p.x = 10` |
+| `p[x]` (in expression) | `p.x` |
+| `PROC foo(POINT p)` (ref) | `func foo(p *POINT)` |
+| `PROC foo(VAL POINT p)` (val) | `func foo(p POINT)` |
+
+Example:
+```occam
+RECORD POINT
+  INT x:
+  INT y:
+
+SEQ
+  POINT p:
+  p[x] := 10
+  p[y] := 20
+  print.int(p[x] + p[y])
+```
+
 ### Arrays
 
 | Occam | Go |

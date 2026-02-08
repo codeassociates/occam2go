@@ -69,6 +69,10 @@ Four packages, one pipeline:
 | `c ? x ; y` (sequential recv) | `_tmp := <-c; x = _tmp._0; y = _tmp._1` |
 | `c ! tag ; val` (variant send) | `c <- _proto_X_tag{val}` |
 | `c ? CASE ...` (variant recv) | `switch _v := (<-c).(type) { ... }` |
+| `RECORD POINT { INT x: }` | `type POINT struct { x int }` |
+| `POINT p:` | `var p POINT` |
+| `p[x] := 10` (field assign) | `p.x = 10` |
+| `p[x]` (field access) | `p.x` |
 | `\` (modulo) | `%` |
 | `/\` / `\/` / `><` | `&` / `\|` / `^` (bitwise AND/OR/XOR) |
 | `~` | `^` (bitwise NOT) |
@@ -105,8 +109,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures, protocols (simple, sequential, and variant).
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
 
 ## Not Yet Implemented
 
-Record types, channel arrays (`[n]CHAN OF TYPE`), channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+Channel arrays (`[n]CHAN OF TYPE`), channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.

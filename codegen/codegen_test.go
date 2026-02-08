@@ -303,3 +303,52 @@ func TestVariantProtocolType(t *testing.T) {
 		t.Errorf("expected quit struct in output, got:\n%s", output)
 	}
 }
+
+func TestRecordType(t *testing.T) {
+	input := `RECORD POINT
+  INT x:
+  INT y:
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "type POINT struct {") {
+		t.Errorf("expected 'type POINT struct {' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "x int") {
+		t.Errorf("expected 'x int' field in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "y int") {
+		t.Errorf("expected 'y int' field in output, got:\n%s", output)
+	}
+}
+
+func TestRecordFieldAssignmentCodegen(t *testing.T) {
+	input := `RECORD POINT
+  INT x:
+  INT y:
+SEQ
+  POINT p:
+  p[x] := 5
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "p.x = 5") {
+		t.Errorf("expected 'p.x = 5' in output, got:\n%s", output)
+	}
+}
+
+func TestRecordFieldAccessCodegen(t *testing.T) {
+	input := `RECORD POINT
+  INT x:
+  INT y:
+SEQ
+  POINT p:
+  INT v:
+  v := p[x]
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "v = p.x") {
+		t.Errorf("expected 'v = p.x' in output, got:\n%s", output)
+	}
+}

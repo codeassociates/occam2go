@@ -50,7 +50,7 @@
 
 | Feature | Notes |
 |---------|-------|
-| **Record types** | Structured data (like Go structs). |
+| ~~**Record types**~~ | Implemented. `RECORD POINT { INT x: INT y: }` → `type POINT struct { x int; y int }`. Field access via bracket syntax (`p[x]` → `p.x`). |
 | **Channel arrays** | `[n]CHAN OF TYPE` — only scalar channel declarations work. |
 | **REAL32 / REAL64** | Only a single REAL type exists. Occam distinguishes the two. |
 
@@ -79,4 +79,4 @@
 2. ~~**STOP**~~ — Implemented
 3. ~~**Bitwise operators**~~ — Implemented
 4. ~~**Protocols**~~ — Implemented
-5. **Record types** — Needed for structured data
+5. ~~**Record types**~~ — Implemented

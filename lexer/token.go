@@ -80,6 +80,7 @@ const (
 	AFTER
 	VAL
 	PROTOCOL
+	RECORD
 	keyword_end
 )
 
@@ -155,6 +156,7 @@ var tokenNames = map[TokenType]string{
 	AFTER:    "AFTER",
 	VAL:       "VAL",
 	PROTOCOL:  "PROTOCOL",
+	RECORD:    "RECORD",
 }
 
 var keywords = map[string]TokenType{
@@ -189,6 +191,7 @@ var keywords = map[string]TokenType{
 	"AFTER": AFTER,
 	"VAL":      VAL,
 	"PROTOCOL": PROTOCOL,
+	"RECORD":   RECORD,
 }
 
 func (t TokenType) String() string {

@@ -61,6 +61,10 @@ type Parser struct {
 	// Track protocol names and definitions
 	protocolNames map[string]bool
 	protocolDefs  map[string]*ast.ProtocolDecl
+
+	// Track record type names and definitions
+	recordNames map[string]bool
+	recordDefs  map[string]*ast.RecordDecl
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -70,6 +74,8 @@ func New(l *lexer.Lexer) *Parser {
 		timerNames:    make(map[string]bool),
 		protocolNames: make(map[string]bool),
 		protocolDefs:  make(map[string]*ast.ProtocolDecl),
+		recordNames:   make(map[string]bool),
+		recordDefs:    make(map[string]*ast.RecordDecl),
 	}
 	// Read two tokens to initialize curToken and peekToken
 	p.nextToken()
@@ -162,6 +168,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseChanDecl()
 	case lexer.PROTOCOL:
 		return p.parseProtocolDecl()
+	case lexer.RECORD:
+		return p.parseRecordDecl()
 	case lexer.TIMER:
 		return p.parseTimerDecl()
 	case lexer.SEQ:
@@ -183,6 +191,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.CASE:
 		return p.parseCaseStatement()
 	case lexer.IDENT:
+		// Check for record variable declaration: TYPENAME var:
+		if p.recordNames[p.curToken.Literal] && p.peekTokenIs(lexer.IDENT) {
+			return p.parseRecordVarDecl()
+		}
 		// Could be assignment, indexed assignment, send, receive, or procedure call
 		if p.peekTokenIs(lexer.LBRACKET) {
 			return p.parseIndexedAssignment()
@@ -536,6 +548,127 @@ func (p *Parser) parseProtocolVariants() []ast.ProtocolVariant {
 	}
 
 	return variants
+}
+
+func (p *Parser) parseRecordDecl() *ast.RecordDecl {
+	decl := &ast.RecordDecl{Token: p.curToken}
+
+	// Expect record name
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	decl.Name = p.curToken.Literal
+
+	// Skip newlines
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT for field block
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after RECORD declaration")
+		return nil
+	}
+	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
+	p.nextToken() // move into block
+
+	// Parse field declarations: TYPE name[, name]*:
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				p.recordNames[decl.Name] = true
+				p.recordDefs[decl.Name] = decl
+				return decl
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		// Expect a type keyword (INT, BYTE, BOOL, REAL)
+		if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+			!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+			p.addError(fmt.Sprintf("expected type in record field, got %s", p.curToken.Type))
+			return nil
+		}
+		fieldType := p.curToken.Literal
+
+		// Parse field names (comma-separated)
+		for {
+			if !p.expectPeek(lexer.IDENT) {
+				return nil
+			}
+			decl.Fields = append(decl.Fields, ast.RecordField{
+				Type: fieldType,
+				Name: p.curToken.Literal,
+			})
+
+			if p.peekTokenIs(lexer.COMMA) {
+				p.nextToken() // consume comma
+			} else {
+				break
+			}
+		}
+
+		// Expect colon
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+
+		// Advance past newline if needed
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
+	}
+
+	p.recordNames[decl.Name] = true
+	p.recordDefs[decl.Name] = decl
+	return decl
+}
+
+func (p *Parser) parseRecordVarDecl() *ast.VarDecl {
+	decl := &ast.VarDecl{
+		Token: p.curToken,
+		Type:  p.curToken.Literal,
+	}
+
+	// Parse variable names
+	for {
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		decl.Names = append(decl.Names, p.curToken.Literal)
+
+		if p.peekTokenIs(lexer.COMMA) {
+			p.nextToken() // consume comma
+		} else {
+			break
+		}
+	}
+
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return decl
 }
 
 func (p *Parser) parseTimerDecl() *ast.TimerDecl {
@@ -1142,6 +1275,10 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
 				return params
 			}
+			p.nextToken()
+		} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
+			// Record type parameter
+			param.Type = p.curToken.Literal
 			p.nextToken()
 		} else {
 			// Expect scalar type

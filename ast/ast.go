@@ -395,3 +395,18 @@ type VariantCase struct {
 
 func (vr *VariantReceive) statementNode()       {}
 func (vr *VariantReceive) TokenLiteral() string { return vr.Token.Literal }
+
+// RecordDecl represents a record type declaration: RECORD POINT { INT x: INT y: }
+type RecordDecl struct {
+	Token  lexer.Token   // the RECORD token
+	Name   string        // record type name
+	Fields []RecordField // named fields
+}
+
+type RecordField struct {
+	Type string // "INT", "BYTE", "BOOL", "REAL"
+	Name string
+}
+
+func (rd *RecordDecl) statementNode()       {}
+func (rd *RecordDecl) TokenLiteral() string { return rd.Token.Literal }
