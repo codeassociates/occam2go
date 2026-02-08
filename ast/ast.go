@@ -301,21 +301,24 @@ type ChanDecl struct {
 func (c *ChanDecl) statementNode()       {}
 func (c *ChanDecl) TokenLiteral() string { return c.Token.Literal }
 
-// Send represents a channel send: c ! x
+// Send represents a channel send: c ! x or c ! x ; y or c ! tag ; x
 type Send struct {
-	Token   lexer.Token // the ! token
-	Channel string      // channel name
-	Value   Expression  // value to send
+	Token      lexer.Token  // the ! token
+	Channel    string       // channel name
+	Value      Expression   // value to send (simple send, backward compat)
+	Values     []Expression // additional values for sequential sends (c ! x ; y)
+	VariantTag string       // variant tag name for variant sends (c ! tag ; x)
 }
 
 func (s *Send) statementNode()       {}
 func (s *Send) TokenLiteral() string { return s.Token.Literal }
 
-// Receive represents a channel receive: c ? x
+// Receive represents a channel receive: c ? x or c ? x ; y
 type Receive struct {
-	Token    lexer.Token // the ? token
-	Channel  string      // channel name
-	Variable string      // variable to receive into
+	Token     lexer.Token // the ? token
+	Channel   string      // channel name
+	Variable  string      // variable to receive into (simple receive)
+	Variables []string    // additional variables for sequential receives (c ? x ; y)
 }
 
 func (r *Receive) statementNode()       {}
@@ -359,3 +362,36 @@ type TimerRead struct {
 
 func (tr *TimerRead) statementNode()       {}
 func (tr *TimerRead) TokenLiteral() string { return tr.Token.Literal }
+
+// ProtocolDecl represents a protocol declaration
+type ProtocolDecl struct {
+	Token    lexer.Token       // the PROTOCOL token
+	Name     string            // protocol name
+	Kind     string            // "simple", "sequential", or "variant"
+	Types    []string          // element types (simple: len=1, sequential: len>1)
+	Variants []ProtocolVariant // only for Kind="variant"
+}
+
+type ProtocolVariant struct {
+	Tag   string   // tag name (e.g., "text", "quit")
+	Types []string // associated types (empty for no-payload tags)
+}
+
+func (pd *ProtocolDecl) statementNode()       {}
+func (pd *ProtocolDecl) TokenLiteral() string { return pd.Token.Literal }
+
+// VariantReceive represents a variant protocol receive: c ? CASE ...
+type VariantReceive struct {
+	Token   lexer.Token // the ? token
+	Channel string
+	Cases   []VariantCase
+}
+
+type VariantCase struct {
+	Tag       string    // variant tag name
+	Variables []string  // variables to bind payload fields
+	Body      Statement
+}
+
+func (vr *VariantReceive) statementNode()       {}
+func (vr *VariantReceive) TokenLiteral() string { return vr.Token.Literal }

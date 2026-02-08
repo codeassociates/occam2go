@@ -1135,3 +1135,224 @@ func TestStringLiteralInProcCall(t *testing.T) {
 		t.Errorf("expected Value='hello', got '%s'", strLit.Value)
 	}
 }
+
+func TestSimpleProtocolDecl(t *testing.T) {
+	input := `PROTOCOL SIGNAL IS INT
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proto, ok := program.Statements[0].(*ast.ProtocolDecl)
+	if !ok {
+		t.Fatalf("expected ProtocolDecl, got %T", program.Statements[0])
+	}
+
+	if proto.Name != "SIGNAL" {
+		t.Errorf("expected name 'SIGNAL', got %s", proto.Name)
+	}
+
+	if proto.Kind != "simple" {
+		t.Errorf("expected kind 'simple', got %s", proto.Kind)
+	}
+
+	if len(proto.Types) != 1 || proto.Types[0] != "INT" {
+		t.Errorf("expected types [INT], got %v", proto.Types)
+	}
+}
+
+func TestSequentialProtocolDecl(t *testing.T) {
+	input := `PROTOCOL PAIR IS INT ; BYTE
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proto, ok := program.Statements[0].(*ast.ProtocolDecl)
+	if !ok {
+		t.Fatalf("expected ProtocolDecl, got %T", program.Statements[0])
+	}
+
+	if proto.Name != "PAIR" {
+		t.Errorf("expected name 'PAIR', got %s", proto.Name)
+	}
+
+	if proto.Kind != "sequential" {
+		t.Errorf("expected kind 'sequential', got %s", proto.Kind)
+	}
+
+	if len(proto.Types) != 2 {
+		t.Fatalf("expected 2 types, got %d", len(proto.Types))
+	}
+	if proto.Types[0] != "INT" || proto.Types[1] != "BYTE" {
+		t.Errorf("expected types [INT, BYTE], got %v", proto.Types)
+	}
+}
+
+func TestVariantProtocolDecl(t *testing.T) {
+	input := `PROTOCOL MSG
+  CASE
+    text; INT
+    number; INT; INT
+    quit
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proto, ok := program.Statements[0].(*ast.ProtocolDecl)
+	if !ok {
+		t.Fatalf("expected ProtocolDecl, got %T", program.Statements[0])
+	}
+
+	if proto.Name != "MSG" {
+		t.Errorf("expected name 'MSG', got %s", proto.Name)
+	}
+
+	if proto.Kind != "variant" {
+		t.Errorf("expected kind 'variant', got %s", proto.Kind)
+	}
+
+	if len(proto.Variants) != 3 {
+		t.Fatalf("expected 3 variants, got %d", len(proto.Variants))
+	}
+
+	// text; INT
+	if proto.Variants[0].Tag != "text" {
+		t.Errorf("expected tag 'text', got %s", proto.Variants[0].Tag)
+	}
+	if len(proto.Variants[0].Types) != 1 || proto.Variants[0].Types[0] != "INT" {
+		t.Errorf("expected types [INT] for text, got %v", proto.Variants[0].Types)
+	}
+
+	// number; INT; INT
+	if proto.Variants[1].Tag != "number" {
+		t.Errorf("expected tag 'number', got %s", proto.Variants[1].Tag)
+	}
+	if len(proto.Variants[1].Types) != 2 {
+		t.Errorf("expected 2 types for number, got %d", len(proto.Variants[1].Types))
+	}
+
+	// quit (no payload)
+	if proto.Variants[2].Tag != "quit" {
+		t.Errorf("expected tag 'quit', got %s", proto.Variants[2].Tag)
+	}
+	if len(proto.Variants[2].Types) != 0 {
+		t.Errorf("expected 0 types for quit, got %d", len(proto.Variants[2].Types))
+	}
+}
+
+func TestChanDeclWithProtocol(t *testing.T) {
+	input := `PROTOCOL SIGNAL IS INT
+CHAN OF SIGNAL c:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(program.Statements))
+	}
+
+	chanDecl, ok := program.Statements[1].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[1])
+	}
+
+	if chanDecl.ElemType != "SIGNAL" {
+		t.Errorf("expected element type 'SIGNAL', got %s", chanDecl.ElemType)
+	}
+
+	if len(chanDecl.Names) != 1 || chanDecl.Names[0] != "c" {
+		t.Errorf("expected name 'c', got %v", chanDecl.Names)
+	}
+}
+
+func TestSequentialSend(t *testing.T) {
+	input := `c ! 42 ; 65
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	send, ok := program.Statements[0].(*ast.Send)
+	if !ok {
+		t.Fatalf("expected Send, got %T", program.Statements[0])
+	}
+
+	if send.Channel != "c" {
+		t.Errorf("expected channel 'c', got %s", send.Channel)
+	}
+
+	// First value
+	intLit, ok := send.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for Value, got %T", send.Value)
+	}
+	if intLit.Value != 42 {
+		t.Errorf("expected value 42, got %d", intLit.Value)
+	}
+
+	// Additional values
+	if len(send.Values) != 1 {
+		t.Fatalf("expected 1 additional value, got %d", len(send.Values))
+	}
+	intLit2, ok := send.Values[0].(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for Values[0], got %T", send.Values[0])
+	}
+	if intLit2.Value != 65 {
+		t.Errorf("expected value 65, got %d", intLit2.Value)
+	}
+}
+
+func TestSequentialReceive(t *testing.T) {
+	input := `c ? x ; y
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "c" {
+		t.Errorf("expected channel 'c', got %s", recv.Channel)
+	}
+
+	if recv.Variable != "x" {
+		t.Errorf("expected variable 'x', got %s", recv.Variable)
+	}
+
+	if len(recv.Variables) != 1 || recv.Variables[0] != "y" {
+		t.Errorf("expected additional variables [y], got %v", recv.Variables)
+	}
+}

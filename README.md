@@ -121,6 +121,52 @@ SEQ
   print.int(result)
 ```
 
+### Protocols
+
+Protocols define the type of data carried on a channel. Three forms are supported:
+
+| Occam | Go |
+|-------|-----|
+| `PROTOCOL SIG IS INT` | `type _proto_SIG = int` |
+| `PROTOCOL PAIR IS INT ; BYTE` | `type _proto_PAIR struct { _0 int; _1 byte }` |
+| `PROTOCOL MSG CASE tag; INT ...` | Interface + concrete structs per tag |
+| `c ! 42 ; 65` (sequential send) | `c <- _proto_PAIR{42, 65}` |
+| `c ? x ; y` (sequential recv) | `_tmp := <-c; x = _tmp._0; y = _tmp._1` |
+| `c ! tag ; val` (variant send) | `c <- _proto_MSG_tag{val}` |
+| `c ? CASE ...` (variant recv) | `switch _v := (<-c).(type) { ... }` |
+
+Sequential protocol example:
+```occam
+PROTOCOL PAIR IS INT ; INT
+
+SEQ
+  CHAN OF PAIR c:
+  INT x, y:
+  PAR
+    c ! 10 ; 20
+    c ? x ; y
+  print.int(x + y)
+```
+
+Variant protocol example:
+```occam
+PROTOCOL MSG
+  CASE
+    data; INT
+    quit
+
+SEQ
+  CHAN OF MSG c:
+  INT result:
+  PAR
+    c ! data ; 42
+    c ? CASE
+      data ; result
+        print.int(result)
+      quit
+        SKIP
+```
+
 ### Arrays
 
 | Occam | Go |
@@ -242,7 +288,7 @@ The sender and receiver must both be ready before the communication occurs. This
 
 1. **Channel direction**: Occam channels are inherently unidirectional. Go channels can be bidirectional but can be restricted using types (`chan<-` for send-only, `<-chan` for receive-only). The transpiler currently generates bidirectional Go channels.
 
-2. **Protocol types**: Occam 2 and later versions support protocol types for structured channel communication. These are not currently supported.
+2. **Protocol types**: Simple, sequential, and variant protocols are supported. Nested protocols (protocols referencing other protocols) are not yet supported.
 
 3. **Channel arrays**: Occam allows arrays of channels. Not yet implemented.
 

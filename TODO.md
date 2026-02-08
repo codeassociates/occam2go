@@ -58,7 +58,7 @@
 
 | Feature | Notes |
 |---------|-------|
-| **Protocols** | Simple, sequential, and variant (tagged union) protocols on channels. |
+| ~~**Protocols**~~ | Implemented. Simple (`PROTOCOL X IS INT`), sequential (`PROTOCOL X IS INT ; BYTE`), and variant (`PROTOCOL X CASE tag; INT ...`) protocols on channels. |
 | **Channel direction** | Restricting channel params to input-only (`?`) or output-only (`!`). Currently all channel params are bidirectional. |
 
 ### Language Constructs
@@ -78,5 +78,5 @@
 1. **Channel arrays** — Essential for scalable concurrent patterns (e.g., worker pools with replicated PAR)
 2. ~~**STOP**~~ — Implemented
 3. ~~**Bitwise operators**~~ — Implemented
-4. **Protocols** — Needed for realistic multi-message channel communication
+4. ~~**Protocols**~~ — Implemented
 5. **Record types** — Needed for structured data

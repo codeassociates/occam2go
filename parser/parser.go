@@ -57,13 +57,19 @@ type Parser struct {
 
 	// Track timer names to distinguish timer reads from channel receives
 	timerNames map[string]bool
+
+	// Track protocol names and definitions
+	protocolNames map[string]bool
+	protocolDefs  map[string]*ast.ProtocolDecl
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
-		l:          l,
-		errors:     []string{},
-		timerNames: make(map[string]bool),
+		l:             l,
+		errors:        []string{},
+		timerNames:    make(map[string]bool),
+		protocolNames: make(map[string]bool),
+		protocolDefs:  make(map[string]*ast.ProtocolDecl),
 	}
 	// Read two tokens to initialize curToken and peekToken
 	p.nextToken()
@@ -154,6 +160,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseArrayDecl()
 	case lexer.CHAN:
 		return p.parseChanDecl()
+	case lexer.PROTOCOL:
+		return p.parseProtocolDecl()
 	case lexer.TIMER:
 		return p.parseTimerDecl()
 	case lexer.SEQ:
@@ -333,14 +341,17 @@ func (p *Parser) parseChanDecl() *ast.ChanDecl {
 		return nil
 	}
 
-	// Expect type (INT, BYTE, BOOL, etc.)
+	// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
 	p.nextToken()
-	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+	if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+		decl.ElemType = p.curToken.Literal
+	} else if p.curTokenIs(lexer.IDENT) {
+		decl.ElemType = p.curToken.Literal
+	} else {
 		p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
 		return nil
 	}
-	decl.ElemType = p.curToken.Literal
 
 	// Parse channel names
 	for {
@@ -361,6 +372,170 @@ func (p *Parser) parseChanDecl() *ast.ChanDecl {
 	}
 
 	return decl
+}
+
+func (p *Parser) parseProtocolDecl() *ast.ProtocolDecl {
+	decl := &ast.ProtocolDecl{Token: p.curToken}
+
+	// Expect protocol name
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	decl.Name = p.curToken.Literal
+
+	// Check if this is IS form (simple/sequential) or CASE form (variant)
+	if p.peekTokenIs(lexer.NEWLINE) || p.peekTokenIs(lexer.INDENT) {
+		// Could be variant: PROTOCOL NAME \n INDENT CASE ...
+		// Skip newlines
+		for p.peekTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.peekTokenIs(lexer.INDENT) {
+			p.nextToken() // consume INDENT
+			p.nextToken() // move into block
+
+			if p.curTokenIs(lexer.CASE) {
+				// Variant protocol
+				decl.Kind = "variant"
+				decl.Variants = p.parseProtocolVariants()
+				p.protocolNames[decl.Name] = true
+				p.protocolDefs[decl.Name] = decl
+				return decl
+			}
+		}
+
+		p.addError("expected IS or CASE in protocol declaration")
+		return nil
+	}
+
+	// IS form: PROTOCOL NAME IS TYPE [; TYPE]*
+	if !p.expectPeek(lexer.IS) {
+		return nil
+	}
+
+	// Parse type list
+	p.nextToken()
+	typeName := p.parseProtocolTypeName()
+	if typeName == "" {
+		return nil
+	}
+	decl.Types = append(decl.Types, typeName)
+
+	// Check for sequential: ; TYPE
+	for p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken() // move to ;
+		p.nextToken() // move past ;
+		typeName = p.parseProtocolTypeName()
+		if typeName == "" {
+			return nil
+		}
+		decl.Types = append(decl.Types, typeName)
+	}
+
+	if len(decl.Types) == 1 {
+		decl.Kind = "simple"
+	} else {
+		decl.Kind = "sequential"
+	}
+
+	p.protocolNames[decl.Name] = true
+	p.protocolDefs[decl.Name] = decl
+	return decl
+}
+
+func (p *Parser) parseProtocolTypeName() string {
+	switch p.curToken.Type {
+	case lexer.INT_TYPE:
+		return "INT"
+	case lexer.BYTE_TYPE:
+		return "BYTE"
+	case lexer.BOOL_TYPE:
+		return "BOOL"
+	case lexer.REAL_TYPE:
+		return "REAL"
+	case lexer.IDENT:
+		return p.curToken.Literal
+	default:
+		p.addError(fmt.Sprintf("expected type name in protocol, got %s", p.curToken.Type))
+		return ""
+	}
+}
+
+func (p *Parser) parseProtocolVariants() []ast.ProtocolVariant {
+	var variants []ast.ProtocolVariant
+
+	// Skip to next line after CASE
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after CASE in protocol")
+		return variants
+	}
+	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
+	p.nextToken() // move into block
+
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return variants
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		// Parse variant: tag [; TYPE]*
+		if !p.curTokenIs(lexer.IDENT) {
+			p.addError(fmt.Sprintf("expected variant tag name, got %s", p.curToken.Type))
+			return variants
+		}
+
+		v := ast.ProtocolVariant{
+			Tag: p.curToken.Literal,
+		}
+
+		// Parse optional types after semicolons
+		for p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken() // move to ;
+			p.nextToken() // move past ;
+			typeName := p.parseProtocolTypeName()
+			if typeName == "" {
+				return variants
+			}
+			v.Types = append(v.Types, typeName)
+		}
+
+		variants = append(variants, v)
+
+		// Advance past newline if needed
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
+	}
+
+	return variants
 }
 
 func (p *Parser) parseTimerDecl() *ast.TimerDecl {
@@ -413,23 +588,175 @@ func (p *Parser) parseSend() *ast.Send {
 	stmt.Token = p.curToken
 
 	p.nextToken() // move past !
+
+	// Check if this is a variant send: first token is an identifier that is a variant tag
+	// We detect this by checking if the identifier is followed by SEMICOLON
+	// and the identifier is NOT followed by an operator (i.e., it's a bare tag name)
+	if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.SEMICOLON) {
+		// Could be variant send (tag ; values) or expression ; values
+		// Check if the identifier is a known protocol variant tag
+		// For simplicity, if IDENT is followed by SEMICOLON and the ident is
+		// not followed by an operator, treat it as a variant tag
+		// We save the ident and check further
+		possibleTag := p.curToken.Literal
+		// Check if this identifier is a protocol variant tag
+		if p.isVariantTag(possibleTag) {
+			stmt.VariantTag = possibleTag
+			p.nextToken() // move to ;
+			// Parse remaining values after the tag
+			for p.curTokenIs(lexer.SEMICOLON) {
+				p.nextToken() // move past ;
+				val := p.parseExpression(LOWEST)
+				stmt.Values = append(stmt.Values, val)
+			}
+			return stmt
+		}
+	}
+
 	stmt.Value = p.parseExpression(LOWEST)
+
+	// Check for sequential send: c ! expr ; expr ; ...
+	for p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken() // move to ;
+		p.nextToken() // move past ;
+		val := p.parseExpression(LOWEST)
+		stmt.Values = append(stmt.Values, val)
+	}
 
 	return stmt
 }
 
-func (p *Parser) parseReceive() *ast.Receive {
-	stmt := &ast.Receive{
-		Channel: p.curToken.Literal,
+func (p *Parser) isVariantTag(name string) bool {
+	for _, proto := range p.protocolDefs {
+		if proto.Kind == "variant" {
+			for _, v := range proto.Variants {
+				if v.Tag == name {
+					return true
+				}
+			}
+		}
 	}
+	return false
+}
+
+func (p *Parser) parseReceive() ast.Statement {
+	channel := p.curToken.Literal
 
 	p.nextToken() // move to ?
-	stmt.Token = p.curToken
+	recvToken := p.curToken
+
+	// Check for variant receive: c ? CASE
+	if p.peekTokenIs(lexer.CASE) {
+		p.nextToken() // move to CASE
+		return p.parseVariantReceive(channel, recvToken)
+	}
+
+	stmt := &ast.Receive{
+		Channel: channel,
+		Token:   recvToken,
+	}
 
 	if !p.expectPeek(lexer.IDENT) {
 		return nil
 	}
 	stmt.Variable = p.curToken.Literal
+
+	// Check for sequential receive: c ? x ; y ; z
+	for p.peekTokenIs(lexer.SEMICOLON) {
+		p.nextToken() // move to ;
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		stmt.Variables = append(stmt.Variables, p.curToken.Literal)
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.VariantReceive {
+	stmt := &ast.VariantReceive{
+		Token:   token,
+		Channel: channel,
+	}
+
+	// Skip to next line
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after ? CASE")
+		return stmt
+	}
+	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
+	p.nextToken() // move into block
+
+	// Parse variant cases (similar to parseCaseStatement pattern)
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return stmt
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		// Parse a variant case: tag [; var]* \n INDENT body
+		vc := ast.VariantCase{}
+
+		if !p.curTokenIs(lexer.IDENT) {
+			p.addError(fmt.Sprintf("expected variant tag name, got %s", p.curToken.Type))
+			return stmt
+		}
+		vc.Tag = p.curToken.Literal
+
+		// Parse optional variables after semicolons: tag ; x ; y
+		for p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken() // move to ;
+			if !p.expectPeek(lexer.IDENT) {
+				return stmt
+			}
+			vc.Variables = append(vc.Variables, p.curToken.Literal)
+		}
+
+		// Skip newlines and expect INDENT for body
+		for p.peekTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.peekTokenIs(lexer.INDENT) {
+			p.nextToken() // consume INDENT
+			p.nextToken() // move to body
+			vc.Body = p.parseStatement()
+
+			// Advance past the last token of the statement if needed
+			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+				p.nextToken()
+			}
+		}
+
+		stmt.Cases = append(stmt.Cases, vc)
+	}
 
 	return stmt
 }
@@ -806,12 +1133,15 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				return params
 			}
 			p.nextToken() // move to element type
-			if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+				param.ChanElemType = p.curToken.Literal
+			} else if p.curTokenIs(lexer.IDENT) {
+				param.ChanElemType = p.curToken.Literal
+			} else {
 				p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
 				return params
 			}
-			param.ChanElemType = p.curToken.Literal
 			p.nextToken()
 		} else {
 			// Expect scalar type

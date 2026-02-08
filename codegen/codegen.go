@@ -20,6 +20,11 @@ type Generator struct {
 	procSigs map[string][]ast.ProcParam
 	// Track current procedure's reference parameters
 	refParams map[string]bool
+
+	// Protocol support
+	protocolDefs  map[string]*ast.ProtocolDecl
+	chanProtocols map[string]string // channel name → protocol name
+	tmpCounter    int               // for unique temp variable names
 }
 
 // Built-in print procedures
@@ -44,8 +49,11 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needOs = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
+	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
+	g.chanProtocols = make(map[string]string)
+	g.tmpCounter = 0
 
-	// First pass: collect procedure signatures and check for PAR/print
+	// First pass: collect procedure signatures, protocols, and check for PAR/print
 	for _, stmt := range program.Statements {
 		if g.containsPar(stmt) {
 			g.needSync = true
@@ -66,6 +74,10 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if fn, ok := stmt.(*ast.FuncDecl); ok {
 			g.procSigs[fn.Name] = fn.Params
 		}
+		if proto, ok := stmt.(*ast.ProtocolDecl); ok {
+			g.protocolDefs[proto.Name] = proto
+		}
+		g.collectChanProtocols(stmt)
 	}
 
 	// Write package declaration
@@ -93,12 +105,15 @@ func (g *Generator) Generate(program *ast.Program) string {
 		g.writeLine("")
 	}
 
-	// Separate procedure declarations from other statements
+	// Separate protocol, procedure declarations from other statements
+	var protocolDecls []ast.Statement
 	var procDecls []ast.Statement
 	var mainStatements []ast.Statement
 
 	for _, stmt := range program.Statements {
 		switch stmt.(type) {
+		case *ast.ProtocolDecl:
+			protocolDecls = append(protocolDecls, stmt)
 		case *ast.ProcDecl, *ast.FuncDecl:
 			procDecls = append(procDecls, stmt)
 		default:
@@ -106,7 +121,12 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 	}
 
-	// Generate procedure declarations first (at package level)
+	// Generate protocol type definitions first (at package level)
+	for _, stmt := range protocolDecls {
+		g.generateStatement(stmt)
+	}
+
+	// Generate procedure declarations (at package level)
 	for _, stmt := range procDecls {
 		g.generateStatement(stmt)
 	}
@@ -167,6 +187,12 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 				return true
 			}
 		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsPar(c.Body) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -216,6 +242,12 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
 			if choice.Body != nil && g.containsPrint(choice.Body) {
+				return true
+			}
+		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsPrint(c.Body) {
 				return true
 			}
 		}
@@ -274,6 +306,12 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 				return true
 			}
 		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsTimer(c.Body) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -323,6 +361,12 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
 			if choice.Body != nil && g.containsStop(choice.Body) {
+				return true
+			}
+		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsStop(c.Body) {
 				return true
 			}
 		}
@@ -385,6 +429,10 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateTimerDecl(s)
 	case *ast.TimerRead:
 		g.generateTimerRead(s)
+	case *ast.ProtocolDecl:
+		g.generateProtocolDecl(s)
+	case *ast.VariantReceive:
+		g.generateVariantReceive(s)
 	}
 }
 
@@ -424,12 +472,205 @@ func (g *Generator) generateSend(send *ast.Send) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(send.Channel)
 	g.write(" <- ")
-	g.generateExpression(send.Value)
+
+	protoName := g.chanProtocols[send.Channel]
+	proto := g.protocolDefs[protoName]
+
+	if send.VariantTag != "" && proto != nil && proto.Kind == "variant" {
+		// Variant send with explicit tag: c <- _proto_NAME_tag{values...}
+		g.write(fmt.Sprintf("_proto_%s_%s{", protoName, send.VariantTag))
+		for i, val := range send.Values {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.generateExpression(val)
+		}
+		g.write("}")
+	} else if proto != nil && proto.Kind == "variant" && send.Value != nil && len(send.Values) == 0 {
+		// Check if the send value is a bare identifier matching a variant tag
+		if ident, ok := send.Value.(*ast.Identifier); ok && g.isVariantTag(protoName, ident.Value) {
+			g.write(fmt.Sprintf("_proto_%s_%s{}", protoName, ident.Value))
+		} else {
+			g.generateExpression(send.Value)
+		}
+	} else if len(send.Values) > 0 && proto != nil && proto.Kind == "sequential" {
+		// Sequential send: c <- _proto_NAME{val1, val2, ...}
+		g.write(fmt.Sprintf("_proto_%s{", protoName))
+		g.generateExpression(send.Value)
+		for _, val := range send.Values {
+			g.write(", ")
+			g.generateExpression(val)
+		}
+		g.write("}")
+	} else {
+		// Simple send
+		g.generateExpression(send.Value)
+	}
 	g.write("\n")
 }
 
 func (g *Generator) generateReceive(recv *ast.Receive) {
-	g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, recv.Channel))
+	if len(recv.Variables) > 0 {
+		// Sequential receive: _tmpN := <-c; x = _tmpN._0; y = _tmpN._1
+		tmpName := fmt.Sprintf("_tmp%d", g.tmpCounter)
+		g.tmpCounter++
+		g.writeLine(fmt.Sprintf("%s := <-%s", tmpName, recv.Channel))
+		g.writeLine(fmt.Sprintf("%s = %s._0", recv.Variable, tmpName))
+		for i, v := range recv.Variables {
+			g.writeLine(fmt.Sprintf("%s = %s._%d", v, tmpName, i+1))
+		}
+	} else {
+		g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, recv.Channel))
+	}
+}
+
+func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
+	switch proto.Kind {
+	case "simple":
+		goType := g.occamTypeToGoBase(proto.Types[0])
+		g.writeLine(fmt.Sprintf("type _proto_%s = %s", proto.Name, goType))
+		g.writeLine("")
+	case "sequential":
+		g.writeLine(fmt.Sprintf("type _proto_%s struct {", proto.Name))
+		g.indent++
+		for i, t := range proto.Types {
+			goType := g.occamTypeToGoBase(t)
+			g.writeLine(fmt.Sprintf("_%d %s", i, goType))
+		}
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+	case "variant":
+		// Interface type
+		g.writeLine(fmt.Sprintf("type _proto_%s interface {", proto.Name))
+		g.indent++
+		g.writeLine(fmt.Sprintf("_is_%s()", proto.Name))
+		g.indent--
+		g.writeLine("}")
+		g.writeLine("")
+		// Concrete types for each variant
+		for _, v := range proto.Variants {
+			if len(v.Types) == 0 {
+				// No-payload variant: empty struct
+				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct{}", proto.Name, v.Tag))
+			} else {
+				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct {", proto.Name, v.Tag))
+				g.indent++
+				for i, t := range v.Types {
+					goType := g.occamTypeToGoBase(t)
+					g.writeLine(fmt.Sprintf("_%d %s", i, goType))
+				}
+				g.indent--
+				g.writeLine("}")
+			}
+			g.writeLine(fmt.Sprintf("func (_proto_%s_%s) _is_%s() {}", proto.Name, v.Tag, proto.Name))
+			g.writeLine("")
+		}
+	}
+}
+
+func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
+	protoName := g.chanProtocols[vr.Channel]
+	g.writeLine(fmt.Sprintf("switch _v := (<-%s).(type) {", vr.Channel))
+	for _, vc := range vr.Cases {
+		g.writeLine(fmt.Sprintf("case _proto_%s_%s:", protoName, vc.Tag))
+		g.indent++
+		for i, v := range vc.Variables {
+			g.writeLine(fmt.Sprintf("%s = _v._%d", v, i))
+		}
+		if vc.Body != nil {
+			g.generateStatement(vc.Body)
+		}
+		g.indent--
+	}
+	g.writeLine("}")
+}
+
+func (g *Generator) isVariantTag(protoName, tagName string) bool {
+	proto := g.protocolDefs[protoName]
+	if proto == nil {
+		return false
+	}
+	for _, v := range proto.Variants {
+		if v.Tag == tagName {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Generator) collectChanProtocols(stmt ast.Statement) {
+	switch s := stmt.(type) {
+	case *ast.ChanDecl:
+		if _, ok := g.protocolDefs[s.ElemType]; ok {
+			for _, name := range s.Names {
+				g.chanProtocols[name] = s.ElemType
+			}
+		}
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			g.collectChanProtocols(inner)
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			g.collectChanProtocols(inner)
+		}
+	case *ast.ProcDecl:
+		// Register PROC param channels
+		for _, p := range s.Params {
+			if p.IsChan {
+				if _, ok := g.protocolDefs[p.ChanElemType]; ok {
+					g.chanProtocols[p.Name] = p.ChanElemType
+				}
+			}
+		}
+		if s.Body != nil {
+			g.collectChanProtocols(s.Body)
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			g.collectChanProtocols(inner)
+		}
+	case *ast.WhileLoop:
+		if s.Body != nil {
+			g.collectChanProtocols(s.Body)
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil {
+				g.collectChanProtocols(choice.Body)
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			if choice.Body != nil {
+				g.collectChanProtocols(choice.Body)
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil {
+				g.collectChanProtocols(c.Body)
+			}
+		}
+	}
+}
+
+// occamTypeToGoBase converts a type name without checking protocol defs
+// (used inside protocol generation to avoid infinite recursion)
+func (g *Generator) occamTypeToGoBase(occamType string) string {
+	switch occamType {
+	case "INT":
+		return "int"
+	case "BYTE":
+		return "byte"
+	case "BOOL":
+		return "bool"
+	case "REAL":
+		return "float64"
+	default:
+		return occamType
+	}
 }
 
 func (g *Generator) occamTypeToGo(occamType string) string {
@@ -443,6 +684,10 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 	case "REAL":
 		return "float64"
 	default:
+		// Check if it's a protocol name
+		if _, ok := g.protocolDefs[occamType]; ok {
+			return "_proto_" + occamType
+		}
 		return occamType // pass through unknown types
 	}
 }
@@ -599,6 +844,12 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	for _, p := range proc.Params {
 		if !p.IsVal && !p.IsChan {
 			g.refParams[p.Name] = true
+		}
+		// Register chan params with protocol mappings
+		if p.IsChan {
+			if _, ok := g.protocolDefs[p.ChanElemType]; ok {
+				g.chanProtocols[p.Name] = p.ChanElemType
+			}
 		}
 	}
 

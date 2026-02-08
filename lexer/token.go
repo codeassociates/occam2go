@@ -79,6 +79,7 @@ const (
 	TIMER
 	AFTER
 	VAL
+	PROTOCOL
 	keyword_end
 )
 
@@ -153,6 +154,7 @@ var tokenNames = map[TokenType]string{
 	TIMER:    "TIMER",
 	AFTER:    "AFTER",
 	VAL:       "VAL",
+	PROTOCOL:  "PROTOCOL",
 }
 
 var keywords = map[string]TokenType{
@@ -185,7 +187,8 @@ var keywords = map[string]TokenType{
 	"REAL":  REAL_TYPE,
 	"TIMER": TIMER,
 	"AFTER": AFTER,
-	"VAL":   VAL,
+	"VAL":      VAL,
+	"PROTOCOL": PROTOCOL,
 }
 
 func (t TokenType) String() string {

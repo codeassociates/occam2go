@@ -255,3 +255,51 @@ func TestStringLiteralInProcCall(t *testing.T) {
 		t.Errorf("expected 'fmt.Println(\"hello\")' in output, got:\n%s", output)
 	}
 }
+
+func TestSimpleProtocolType(t *testing.T) {
+	input := `PROTOCOL SIGNAL IS INT
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "type _proto_SIGNAL = int") {
+		t.Errorf("expected 'type _proto_SIGNAL = int' in output, got:\n%s", output)
+	}
+}
+
+func TestSequentialProtocolType(t *testing.T) {
+	input := `PROTOCOL PAIR IS INT ; BYTE
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "type _proto_PAIR struct {") {
+		t.Errorf("expected struct declaration in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "_0 int") {
+		t.Errorf("expected '_0 int' field in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "_1 byte") {
+		t.Errorf("expected '_1 byte' field in output, got:\n%s", output)
+	}
+}
+
+func TestVariantProtocolType(t *testing.T) {
+	input := `PROTOCOL MSG
+  CASE
+    text; INT
+    quit
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "type _proto_MSG interface {") {
+		t.Errorf("expected interface declaration in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "_is_MSG()") {
+		t.Errorf("expected marker method in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "type _proto_MSG_text struct {") {
+		t.Errorf("expected text struct in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "type _proto_MSG_quit struct{}") {
+		t.Errorf("expected quit struct in output, got:\n%s", output)
+	}
+}
