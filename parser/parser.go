@@ -1212,6 +1212,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = &ast.BooleanLiteral{Token: p.curToken, Value: true}
 	case lexer.FALSE:
 		left = &ast.BooleanLiteral{Token: p.curToken, Value: false}
+	case lexer.STRING:
+		left = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 	case lexer.LPAREN:
 		p.nextToken()
 		left = p.parseExpression(LOWEST)

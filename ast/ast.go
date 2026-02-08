@@ -224,6 +224,15 @@ type BooleanLiteral struct {
 func (bl *BooleanLiteral) expressionNode()      {}
 func (bl *BooleanLiteral) TokenLiteral() string { return bl.Token.Literal }
 
+// StringLiteral represents a string literal: "hello"
+type StringLiteral struct {
+	Token lexer.Token
+	Value string
+}
+
+func (sl *StringLiteral) expressionNode()      {}
+func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
+
 // BinaryExpr represents a binary operation: x + y
 type BinaryExpr struct {
 	Token    lexer.Token // the operator token

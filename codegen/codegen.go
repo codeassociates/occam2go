@@ -725,6 +725,8 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write(e.Value)
 	case *ast.IntegerLiteral:
 		g.write(fmt.Sprintf("%d", e.Value))
+	case *ast.StringLiteral:
+		g.write(fmt.Sprintf("%q", e.Value))
 	case *ast.BooleanLiteral:
 		if e.Value {
 			g.write("true")

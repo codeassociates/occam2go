@@ -1005,3 +1005,65 @@ func checkParserErrors(t *testing.T, p *Parser) {
 	}
 	t.FailNow()
 }
+
+func TestStringLiteral(t *testing.T) {
+	input := `x := "hello world"
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assign.Name != "x" {
+		t.Errorf("expected Name=x, got %s", assign.Name)
+	}
+
+	strLit, ok := assign.Value.(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("expected StringLiteral, got %T", assign.Value)
+	}
+
+	if strLit.Value != "hello world" {
+		t.Errorf("expected Value='hello world', got '%s'", strLit.Value)
+	}
+}
+
+func TestStringLiteralInProcCall(t *testing.T) {
+	input := `print.string("hello")
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	call, ok := program.Statements[0].(*ast.ProcCall)
+	if !ok {
+		t.Fatalf("expected ProcCall, got %T", program.Statements[0])
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	strLit, ok := call.Args[0].(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("expected StringLiteral arg, got %T", call.Args[0])
+	}
+
+	if strLit.Value != "hello" {
+		t.Errorf("expected Value='hello', got '%s'", strLit.Value)
+	}
+}

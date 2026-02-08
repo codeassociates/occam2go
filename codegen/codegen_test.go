@@ -180,3 +180,23 @@ func transpile(t *testing.T, input string) string {
 	gen := New()
 	return gen.Generate(program)
 }
+
+func TestStringLiteral(t *testing.T) {
+	input := `x := "hello world"
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, `x = "hello world"`) {
+		t.Errorf("expected 'x = \"hello world\"' in output, got:\n%s", output)
+	}
+}
+
+func TestStringLiteralInProcCall(t *testing.T) {
+	input := `print.string("hello")
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, `fmt.Println("hello")`) {
+		t.Errorf("expected 'fmt.Println(\"hello\")' in output, got:\n%s", output)
+	}
+}
