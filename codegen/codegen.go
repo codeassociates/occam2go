@@ -455,8 +455,19 @@ func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 
 func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	goType := g.occamTypeToGo(decl.ElemType)
-	for _, name := range decl.Names {
-		g.writeLine(fmt.Sprintf("%s := make(chan %s)", name, goType))
+	if decl.IsArray {
+		for _, name := range decl.Names {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("%s := make([]chan %s, ", name, goType))
+			g.generateExpression(decl.Size)
+			g.write(")\n")
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for _i := range %s { %s[_i] = make(chan %s) }\n", name, name, goType))
+		}
+	} else {
+		for _, name := range decl.Names {
+			g.writeLine(fmt.Sprintf("%s := make(chan %s)", name, goType))
+		}
 	}
 }
 
@@ -483,6 +494,11 @@ func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
 func (g *Generator) generateSend(send *ast.Send) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(send.Channel)
+	if send.ChannelIndex != nil {
+		g.write("[")
+		g.generateExpression(send.ChannelIndex)
+		g.write("]")
+	}
 	g.write(" <- ")
 
 	protoName := g.chanProtocols[send.Channel]
@@ -522,17 +538,32 @@ func (g *Generator) generateSend(send *ast.Send) {
 }
 
 func (g *Generator) generateReceive(recv *ast.Receive) {
+	chanRef := recv.Channel
+	if recv.ChannelIndex != nil {
+		var buf strings.Builder
+		buf.WriteString(recv.Channel)
+		buf.WriteString("[")
+		// Generate the index expression into a temporary buffer
+		oldBuilder := g.builder
+		g.builder = strings.Builder{}
+		g.generateExpression(recv.ChannelIndex)
+		buf.WriteString(g.builder.String())
+		g.builder = oldBuilder
+		buf.WriteString("]")
+		chanRef = buf.String()
+	}
+
 	if len(recv.Variables) > 0 {
 		// Sequential receive: _tmpN := <-c; x = _tmpN._0; y = _tmpN._1
 		tmpName := fmt.Sprintf("_tmp%d", g.tmpCounter)
 		g.tmpCounter++
-		g.writeLine(fmt.Sprintf("%s := <-%s", tmpName, recv.Channel))
+		g.writeLine(fmt.Sprintf("%s := <-%s", tmpName, chanRef))
 		g.writeLine(fmt.Sprintf("%s = %s._0", recv.Variable, tmpName))
 		for i, v := range recv.Variables {
 			g.writeLine(fmt.Sprintf("%s = %s._%d", v, tmpName, i+1))
 		}
 	} else {
-		g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, recv.Channel))
+		g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, chanRef))
 	}
 }
 
@@ -583,7 +614,20 @@ func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
 
 func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
 	protoName := g.chanProtocols[vr.Channel]
-	g.writeLine(fmt.Sprintf("switch _v := (<-%s).(type) {", vr.Channel))
+	chanRef := vr.Channel
+	if vr.ChannelIndex != nil {
+		var buf strings.Builder
+		buf.WriteString(vr.Channel)
+		buf.WriteString("[")
+		oldBuilder := g.builder
+		g.builder = strings.Builder{}
+		g.generateExpression(vr.ChannelIndex)
+		buf.WriteString(g.builder.String())
+		g.builder = oldBuilder
+		buf.WriteString("]")
+		chanRef = buf.String()
+	}
+	g.writeLine(fmt.Sprintf("switch _v := (<-%s).(type) {", chanRef))
 	for _, vc := range vr.Cases {
 		g.writeLine(fmt.Sprintf("case _proto_%s_%s:", protoName, vc.Tag))
 		g.indent++
@@ -628,9 +672,9 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 			g.collectChanProtocols(inner)
 		}
 	case *ast.ProcDecl:
-		// Register PROC param channels
+		// Register PROC param channels (including channel array params)
 		for _, p := range s.Params {
-			if p.IsChan {
+			if p.IsChan || p.IsChanArray {
 				if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 					g.chanProtocols[p.Name] = p.ChanElemType
 				}
@@ -929,6 +973,10 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
 		} else if c.Guard != nil {
 			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", c.Variable, i))
+		} else if c.ChannelIndex != nil {
+			g.write(fmt.Sprintf("case %s = <-%s[", c.Variable, c.Channel))
+			g.generateExpression(c.ChannelIndex)
+			g.write("]:\n")
 		} else {
 			g.write(fmt.Sprintf("case %s = <-%s:\n", c.Variable, c.Channel))
 		}
@@ -946,11 +994,11 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	oldRefParams := g.refParams
 	g.refParams = make(map[string]bool)
 	for _, p := range proc.Params {
-		if !p.IsVal && !p.IsChan {
+		if !p.IsVal && !p.IsChan && !p.IsChanArray {
 			g.refParams[p.Name] = true
 		}
 		// Register chan params with protocol mappings
-		if p.IsChan {
+		if p.IsChan || p.IsChanArray {
 			if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 				g.chanProtocols[p.Name] = p.ChanElemType
 			}
@@ -984,7 +1032,9 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 	var parts []string
 	for _, p := range params {
 		var goType string
-		if p.IsChan {
+		if p.IsChanArray {
+			goType = "[]chan " + g.occamTypeToGo(p.ChanElemType)
+		} else if p.IsChan {
 			goType = "chan " + g.occamTypeToGo(p.ChanElemType)
 		} else {
 			goType = g.occamTypeToGo(p.Type)
@@ -1017,8 +1067,8 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 			g.write(", ")
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
-		// Channels are already reference types, so no & needed
-		if i < len(params) && !params[i].IsVal && !params[i].IsChan {
+		// Channels and channel arrays are already reference types, so no & needed
+		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray {
 			g.write("&")
 		}
 		g.generateExpression(arg)

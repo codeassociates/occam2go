@@ -77,6 +77,10 @@ Four packages, one pipeline:
 | `/\` / `\/` / `><` | `&` / `\|` / `^` (bitwise AND/OR/XOR) |
 | `~` | `^` (bitwise NOT) |
 | `<<` / `>>` | `<<` / `>>` (shifts) |
+| `[5]CHAN OF INT cs:` | `cs := make([]chan int, 5)` + init loop |
+| `cs[i] ! 42` | `cs[i] <- 42` |
+| `cs[i] ? x` | `x = <-cs[i]` |
+| `PROC f([]CHAN OF INT cs)` | `func f(cs []chan int)` |
 | Non-VAL params | `*type` pointer params, callers pass `&arg` |
 
 ## Key Parser Patterns
@@ -109,8 +113,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, PROC (with VAL, reference, and CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
 
 ## Not Yet Implemented
 
-Channel arrays (`[n]CHAN OF TYPE`), channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+Channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.

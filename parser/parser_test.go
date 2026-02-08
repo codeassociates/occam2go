@@ -1503,6 +1503,169 @@ func TestRecordFieldAccess(t *testing.T) {
 	}
 }
 
+func TestChanArrayDecl(t *testing.T) {
+	input := `[5]CHAN OF INT cs:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
+	}
+
+	if !decl.IsArray {
+		t.Error("expected IsArray=true")
+	}
+
+	sizeLit, ok := decl.Size.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Size)
+	}
+	if sizeLit.Value != 5 {
+		t.Errorf("expected size 5, got %d", sizeLit.Value)
+	}
+
+	if decl.ElemType != "INT" {
+		t.Errorf("expected element type INT, got %s", decl.ElemType)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "cs" {
+		t.Errorf("expected name 'cs', got %v", decl.Names)
+	}
+}
+
+func TestIndexedSend(t *testing.T) {
+	input := `cs[0] ! 42
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	send, ok := program.Statements[0].(*ast.Send)
+	if !ok {
+		t.Fatalf("expected Send, got %T", program.Statements[0])
+	}
+
+	if send.Channel != "cs" {
+		t.Errorf("expected channel 'cs', got %s", send.Channel)
+	}
+
+	if send.ChannelIndex == nil {
+		t.Fatal("expected ChannelIndex, got nil")
+	}
+
+	idxLit, ok := send.ChannelIndex.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for index, got %T", send.ChannelIndex)
+	}
+	if idxLit.Value != 0 {
+		t.Errorf("expected index 0, got %d", idxLit.Value)
+	}
+
+	valLit, ok := send.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for value, got %T", send.Value)
+	}
+	if valLit.Value != 42 {
+		t.Errorf("expected value 42, got %d", valLit.Value)
+	}
+}
+
+func TestIndexedReceive(t *testing.T) {
+	input := `cs[i] ? x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "cs" {
+		t.Errorf("expected channel 'cs', got %s", recv.Channel)
+	}
+
+	if recv.ChannelIndex == nil {
+		t.Fatal("expected ChannelIndex, got nil")
+	}
+
+	idxIdent, ok := recv.ChannelIndex.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for index, got %T", recv.ChannelIndex)
+	}
+	if idxIdent.Value != "i" {
+		t.Errorf("expected index 'i', got %s", idxIdent.Value)
+	}
+
+	if recv.Variable != "x" {
+		t.Errorf("expected variable 'x', got %s", recv.Variable)
+	}
+}
+
+func TestChanArrayParam(t *testing.T) {
+	input := `PROC worker([]CHAN OF INT cs, VAL INT n)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(proc.Params))
+	}
+
+	p0 := proc.Params[0]
+	if !p0.IsChan {
+		t.Error("param 0: expected IsChan=true")
+	}
+	if !p0.IsChanArray {
+		t.Error("param 0: expected IsChanArray=true")
+	}
+	if p0.ChanElemType != "INT" {
+		t.Errorf("param 0: expected ChanElemType=INT, got %s", p0.ChanElemType)
+	}
+	if p0.Name != "cs" {
+		t.Errorf("param 0: expected Name=cs, got %s", p0.Name)
+	}
+
+	p1 := proc.Params[1]
+	if p1.IsChan || p1.IsChanArray {
+		t.Error("param 1: expected IsChan=false, IsChanArray=false")
+	}
+	if !p1.IsVal {
+		t.Error("param 1: expected IsVal=true")
+	}
+}
+
 func TestSequentialReceive(t *testing.T) {
 	input := `c ? x ; y
 `

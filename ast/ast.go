@@ -127,6 +127,7 @@ type ProcParam struct {
 	Type         string // INT, BYTE, BOOL, etc.
 	Name         string
 	IsChan       bool   // true if this is a CHAN OF <type> parameter
+	IsChanArray  bool   // true for []CHAN OF TYPE params
 	ChanElemType string // element type when IsChan (e.g., "INT")
 }
 
@@ -291,11 +292,13 @@ type IndexExpr struct {
 func (ie *IndexExpr) expressionNode()      {}
 func (ie *IndexExpr) TokenLiteral() string { return ie.Token.Literal }
 
-// ChanDecl represents a channel declaration: CHAN OF INT c:
+// ChanDecl represents a channel declaration: CHAN OF INT c: or [n]CHAN OF INT cs:
 type ChanDecl struct {
 	Token    lexer.Token // the CHAN token
 	ElemType string      // the element type (INT, BYTE, etc.)
 	Names    []string    // channel names
+	IsArray  bool        // true for [n]CHAN OF TYPE
+	Size     Expression  // array size when IsArray
 }
 
 func (c *ChanDecl) statementNode()       {}
@@ -303,11 +306,12 @@ func (c *ChanDecl) TokenLiteral() string { return c.Token.Literal }
 
 // Send represents a channel send: c ! x or c ! x ; y or c ! tag ; x
 type Send struct {
-	Token      lexer.Token  // the ! token
-	Channel    string       // channel name
-	Value      Expression   // value to send (simple send, backward compat)
-	Values     []Expression // additional values for sequential sends (c ! x ; y)
-	VariantTag string       // variant tag name for variant sends (c ! tag ; x)
+	Token        lexer.Token  // the ! token
+	Channel      string       // channel name
+	ChannelIndex Expression   // non-nil for cs[i] ! value
+	Value        Expression   // value to send (simple send, backward compat)
+	Values       []Expression // additional values for sequential sends (c ! x ; y)
+	VariantTag   string       // variant tag name for variant sends (c ! tag ; x)
 }
 
 func (s *Send) statementNode()       {}
@@ -315,10 +319,11 @@ func (s *Send) TokenLiteral() string { return s.Token.Literal }
 
 // Receive represents a channel receive: c ? x or c ? x ; y
 type Receive struct {
-	Token     lexer.Token // the ? token
-	Channel   string      // channel name
-	Variable  string      // variable to receive into (simple receive)
-	Variables []string    // additional variables for sequential receives (c ? x ; y)
+	Token        lexer.Token // the ? token
+	Channel      string      // channel name
+	ChannelIndex Expression  // non-nil for cs[i] ? x
+	Variable     string      // variable to receive into (simple receive)
+	Variables    []string    // additional variables for sequential receives (c ? x ; y)
 }
 
 func (r *Receive) statementNode()       {}
@@ -335,13 +340,14 @@ func (a *AltBlock) TokenLiteral() string { return a.Token.Literal }
 
 // AltCase represents a single case in an ALT block
 type AltCase struct {
-	Guard    Expression // optional guard condition (nil if no guard)
-	Channel  string     // channel name
-	Variable string     // variable to receive into
-	Body     Statement  // the body to execute
-	IsTimer  bool       // true if this is a timer AFTER case
-	Timer    string     // timer name (when IsTimer)
-	Deadline Expression // AFTER deadline expression (when IsTimer)
+	Guard        Expression // optional guard condition (nil if no guard)
+	Channel      string     // channel name
+	ChannelIndex Expression // non-nil for cs[i] ? x in ALT
+	Variable     string     // variable to receive into
+	Body         Statement  // the body to execute
+	IsTimer      bool       // true if this is a timer AFTER case
+	Timer        string     // timer name (when IsTimer)
+	Deadline     Expression // AFTER deadline expression (when IsTimer)
 }
 
 // TimerDecl represents a timer declaration: TIMER tim:
@@ -382,9 +388,10 @@ func (pd *ProtocolDecl) TokenLiteral() string { return pd.Token.Literal }
 
 // VariantReceive represents a variant protocol receive: c ? CASE ...
 type VariantReceive struct {
-	Token   lexer.Token // the ? token
-	Channel string
-	Cases   []VariantCase
+	Token        lexer.Token // the ? token
+	Channel      string
+	ChannelIndex Expression // non-nil for cs[i] ? CASE ...
+	Cases        []VariantCase
 }
 
 type VariantCase struct {

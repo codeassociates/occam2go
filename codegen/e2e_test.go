@@ -1153,6 +1153,74 @@ SEQ
 	}
 }
 
+func TestE2E_ChanArrayBasic(t *testing.T) {
+	// Declare channel array, use in replicated PAR to send/receive
+	occam := `SEQ
+  [3]CHAN OF INT cs:
+  INT sum:
+  sum := 0
+  PAR
+    PAR i = 0 FOR 3
+      cs[i] ! (i + 1) * 10
+    SEQ i = 0 FOR 3
+      INT x:
+      cs[i] ? x
+      sum := sum + x
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "60\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChanArrayWithProc(t *testing.T) {
+	// Pass channel array to a PROC
+	occam := `PROC sender([]CHAN OF INT cs, VAL INT n)
+  SEQ i = 0 FOR n
+    cs[i] ! (i + 1) * 100
+
+SEQ
+  [3]CHAN OF INT cs:
+  INT sum:
+  sum := 0
+  PAR
+    sender(cs, 3)
+    SEQ i = 0 FOR 3
+      INT x:
+      cs[i] ? x
+      sum := sum + x
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "600\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChanArrayAlt(t *testing.T) {
+	// Use channel array in ALT
+	occam := `SEQ
+  [2]CHAN OF INT cs:
+  INT result:
+  result := 0
+  PAR
+    cs[0] ! 42
+    ALT
+      cs[0] ? result
+        print.int(result)
+      cs[1] ? result
+        print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ProtocolWithProc(t *testing.T) {
 	// Protocol channel passed as PROC parameter
 	occam := `PROTOCOL PAIR IS INT ; INT

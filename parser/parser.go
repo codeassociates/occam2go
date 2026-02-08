@@ -195,9 +195,9 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.recordNames[p.curToken.Literal] && p.peekTokenIs(lexer.IDENT) {
 			return p.parseRecordVarDecl()
 		}
-		// Could be assignment, indexed assignment, send, receive, or procedure call
+		// Could be assignment, indexed assignment, indexed send/receive, send, receive, or procedure call
 		if p.peekTokenIs(lexer.LBRACKET) {
-			return p.parseIndexedAssignment()
+			return p.parseIndexedOperation()
 		}
 		if p.peekTokenIs(lexer.ASSIGN) {
 			return p.parseAssignment()
@@ -261,17 +261,67 @@ func (p *Parser) parseAssignment() *ast.Assignment {
 	return stmt
 }
 
-func (p *Parser) parseArrayDecl() *ast.ArrayDecl {
-	decl := &ast.ArrayDecl{Token: p.curToken}
+func (p *Parser) parseArrayDecl() ast.Statement {
+	lbracketToken := p.curToken
 
 	// Parse size expression after [
 	p.nextToken()
-	decl.Size = p.parseExpression(LOWEST)
+	size := p.parseExpression(LOWEST)
 
 	// Expect ]
 	if !p.expectPeek(lexer.RBRACKET) {
 		return nil
 	}
+
+	// Check if this is a channel array: [n]CHAN OF TYPE
+	if p.peekTokenIs(lexer.CHAN) {
+		p.nextToken() // move to CHAN
+		chanDecl := &ast.ChanDecl{
+			Token:   p.curToken,
+			IsArray: true,
+			Size:    size,
+		}
+
+		// Expect OF
+		if !p.expectPeek(lexer.OF) {
+			return nil
+		}
+
+		// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
+		p.nextToken()
+		if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+			p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+			chanDecl.ElemType = p.curToken.Literal
+		} else if p.curTokenIs(lexer.IDENT) {
+			chanDecl.ElemType = p.curToken.Literal
+		} else {
+			p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+			return nil
+		}
+
+		// Parse channel names
+		for {
+			if !p.expectPeek(lexer.IDENT) {
+				return nil
+			}
+			chanDecl.Names = append(chanDecl.Names, p.curToken.Literal)
+
+			if p.peekTokenIs(lexer.COMMA) {
+				p.nextToken() // consume comma
+			} else {
+				break
+			}
+		}
+
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+
+		return chanDecl
+	}
+
+	// Regular array declaration
+	decl := &ast.ArrayDecl{Token: lbracketToken, Size: size}
 
 	// Expect type (INT, BYTE, BOOL, REAL)
 	p.nextToken()
@@ -303,30 +353,109 @@ func (p *Parser) parseArrayDecl() *ast.ArrayDecl {
 	return decl
 }
 
-func (p *Parser) parseIndexedAssignment() *ast.Assignment {
-	stmt := &ast.Assignment{
-		Name: p.curToken.Literal,
-	}
+func (p *Parser) parseIndexedOperation() ast.Statement {
+	name := p.curToken.Literal
 
 	p.nextToken() // move to [
 	p.nextToken() // move past [
-	stmt.Index = p.parseExpression(LOWEST)
+	index := p.parseExpression(LOWEST)
 
 	// Expect ]
 	if !p.expectPeek(lexer.RBRACKET) {
 		return nil
 	}
 
-	// Expect :=
-	if !p.expectPeek(lexer.ASSIGN) {
-		return nil
+	// Check what follows ]
+	if p.peekTokenIs(lexer.ASSIGN) {
+		// Indexed assignment: name[index] := value
+		p.nextToken() // move to :=
+		stmt := &ast.Assignment{
+			Name:  name,
+			Token: p.curToken,
+			Index: index,
+		}
+		p.nextToken() // move past :=
+		stmt.Value = p.parseExpression(LOWEST)
+		return stmt
 	}
-	stmt.Token = p.curToken
 
-	p.nextToken() // move past :=
-	stmt.Value = p.parseExpression(LOWEST)
+	if p.peekTokenIs(lexer.SEND) {
+		// Indexed channel send: cs[i] ! value
+		p.nextToken() // move to !
+		sendToken := p.curToken
+		p.nextToken() // move past !
 
-	return stmt
+		stmt := &ast.Send{
+			Token:        sendToken,
+			Channel:      name,
+			ChannelIndex: index,
+		}
+
+		// Check if this is a variant send: first token is an identifier that is a variant tag
+		if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.SEMICOLON) {
+			possibleTag := p.curToken.Literal
+			if p.isVariantTag(possibleTag) {
+				stmt.VariantTag = possibleTag
+				p.nextToken() // move to ;
+				for p.curTokenIs(lexer.SEMICOLON) {
+					p.nextToken() // move past ;
+					val := p.parseExpression(LOWEST)
+					stmt.Values = append(stmt.Values, val)
+				}
+				return stmt
+			}
+		}
+
+		stmt.Value = p.parseExpression(LOWEST)
+
+		// Check for sequential send
+		for p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken() // move to ;
+			p.nextToken() // move past ;
+			val := p.parseExpression(LOWEST)
+			stmt.Values = append(stmt.Values, val)
+		}
+
+		return stmt
+	}
+
+	if p.peekTokenIs(lexer.RECEIVE) {
+		// Indexed channel receive: cs[i] ? x or cs[i] ? CASE ...
+		p.nextToken() // move to ?
+		recvToken := p.curToken
+
+		// Check for variant receive: cs[i] ? CASE
+		if p.peekTokenIs(lexer.CASE) {
+			p.nextToken() // move to CASE
+			return p.parseVariantReceiveWithIndex(name, index, recvToken)
+		}
+
+		stmt := &ast.Receive{
+			Token:        recvToken,
+			Channel:      name,
+			ChannelIndex: index,
+		}
+
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		stmt.Variable = p.curToken.Literal
+
+		// Check for sequential receive
+		for p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken() // move to ;
+			if !p.expectPeek(lexer.IDENT) {
+				return nil
+			}
+			stmt.Variables = append(stmt.Variables, p.curToken.Literal)
+		}
+
+		return stmt
+	}
+
+	// Default: treat as indexed assignment (shouldn't reach here normally)
+	p.addError(fmt.Sprintf("expected :=, !, or ? after %s[...], got %s", name, p.peekToken.Type))
+	return nil
 }
 
 func (p *Parser) parseIndexExpression(left ast.Expression) *ast.IndexExpr {
@@ -894,6 +1023,87 @@ func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.Var
 	return stmt
 }
 
+func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndex ast.Expression, token lexer.Token) *ast.VariantReceive {
+	stmt := &ast.VariantReceive{
+		Token:        token,
+		Channel:      channel,
+		ChannelIndex: channelIndex,
+	}
+
+	// Skip to next line
+	for p.peekTokenIs(lexer.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Expect INDENT
+	if !p.peekTokenIs(lexer.INDENT) {
+		p.addError("expected indented block after ? CASE")
+		return stmt
+	}
+	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
+	p.nextToken() // move into block
+
+	for !p.curTokenIs(lexer.EOF) {
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return stmt
+			}
+			p.nextToken()
+		}
+
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		vc := ast.VariantCase{}
+
+		if !p.curTokenIs(lexer.IDENT) {
+			p.addError(fmt.Sprintf("expected variant tag name, got %s", p.curToken.Type))
+			return stmt
+		}
+		vc.Tag = p.curToken.Literal
+
+		for p.peekTokenIs(lexer.SEMICOLON) {
+			p.nextToken() // move to ;
+			if !p.expectPeek(lexer.IDENT) {
+				return stmt
+			}
+			vc.Variables = append(vc.Variables, p.curToken.Literal)
+		}
+
+		for p.peekTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.peekTokenIs(lexer.INDENT) {
+			p.nextToken() // consume INDENT
+			p.nextToken() // move to body
+			vc.Body = p.parseStatement()
+
+			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+				p.nextToken()
+			}
+		}
+
+		stmt.Cases = append(stmt.Cases, vc)
+	}
+
+	return stmt
+}
+
 func (p *Parser) parseSeqBlock() *ast.SeqBlock {
 	block := &ast.SeqBlock{Token: p.curToken}
 
@@ -1092,6 +1302,23 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			}
 			altCase.Variable = p.curToken.Literal
 		}
+	} else if p.peekTokenIs(lexer.LBRACKET) {
+		// Indexed channel case: cs[i] ? var
+		name := p.curToken.Literal
+		altCase.Channel = name
+		p.nextToken() // move to [
+		p.nextToken() // move past [
+		altCase.ChannelIndex = p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+		if !p.expectPeek(lexer.RECEIVE) {
+			return nil
+		}
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		altCase.Variable = p.curToken.Literal
 	} else {
 		// Could be a guard followed by & channel ? var
 		// For simplicity, parse expression until we hit &
@@ -1107,12 +1334,22 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 		p.nextToken() // move to &
 		p.nextToken() // move past &
 
-		// Now expect channel ? var
+		// Now expect channel ? var or channel[index] ? var
 		if !p.curTokenIs(lexer.IDENT) {
 			p.addError(fmt.Sprintf("expected channel name after guard, got %s", p.curToken.Type))
 			return nil
 		}
 		altCase.Channel = p.curToken.Literal
+
+		if p.peekTokenIs(lexer.LBRACKET) {
+			// Indexed channel with guard: guard & cs[i] ? var
+			p.nextToken() // move to [
+			p.nextToken() // move past [
+			altCase.ChannelIndex = p.parseExpression(LOWEST)
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+		}
 
 		if !p.expectPeek(lexer.RECEIVE) {
 			return nil
@@ -1259,8 +1496,30 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Check for CHAN OF <type>
-		if p.curTokenIs(lexer.CHAN) {
+		// Check for []CHAN OF <type> (channel array parameter)
+		if p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
+			p.nextToken() // consume ]
+			if !p.expectPeek(lexer.CHAN) {
+				return params
+			}
+			param.IsChan = true
+			param.IsChanArray = true
+			if !p.expectPeek(lexer.OF) {
+				return params
+			}
+			p.nextToken() // move to element type
+			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+				param.ChanElemType = p.curToken.Literal
+			} else if p.curTokenIs(lexer.IDENT) {
+				param.ChanElemType = p.curToken.Literal
+			} else {
+				p.addError(fmt.Sprintf("expected type after []CHAN OF, got %s", p.curToken.Type))
+				return params
+			}
+			p.nextToken()
+		} else if p.curTokenIs(lexer.CHAN) {
+			// Check for CHAN OF <type>
 			param.IsChan = true
 			if !p.expectPeek(lexer.OF) {
 				return params

@@ -337,6 +337,50 @@ SEQ
 	}
 }
 
+func TestChanArrayDeclGen(t *testing.T) {
+	input := `[5]CHAN OF INT cs:
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "cs := make([]chan int, 5)") {
+		t.Errorf("expected 'cs := make([]chan int, 5)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "for _i := range cs { cs[_i] = make(chan int) }") {
+		t.Errorf("expected init loop in output, got:\n%s", output)
+	}
+}
+
+func TestIndexedSendGen(t *testing.T) {
+	input := `cs[0] ! 42
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "cs[0] <- 42") {
+		t.Errorf("expected 'cs[0] <- 42' in output, got:\n%s", output)
+	}
+}
+
+func TestIndexedReceiveGen(t *testing.T) {
+	input := `cs[0] ? x
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "x = <-cs[0]") {
+		t.Errorf("expected 'x = <-cs[0]' in output, got:\n%s", output)
+	}
+}
+
+func TestChanArrayParamGen(t *testing.T) {
+	input := `PROC worker([]CHAN OF INT cs)
+  SKIP
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "func worker(cs []chan int)") {
+		t.Errorf("expected 'func worker(cs []chan int)' in output, got:\n%s", output)
+	}
+}
+
 func TestRecordFieldAccessCodegen(t *testing.T) {
 	input := `RECORD POINT
   INT x:
