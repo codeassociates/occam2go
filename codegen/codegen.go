@@ -764,8 +764,8 @@ func (g *Generator) generateBinaryExpr(expr *ast.BinaryExpr) {
 func (g *Generator) generateUnaryExpr(expr *ast.UnaryExpr) {
 	op := g.occamOpToGo(expr.Operator)
 	g.write(op)
-	if op == "!" {
-		// Go's NOT doesn't need space
+	if op == "!" || op == "^" {
+		// Go's logical NOT and bitwise NOT don't need space
 	} else {
 		g.write(" ")
 	}
@@ -788,6 +788,18 @@ func (g *Generator) occamOpToGo(op string) string {
 		return "%"
 	case "AFTER":
 		return ">"
+	case "/\\":
+		return "&"
+	case "\\/":
+		return "|"
+	case "><":
+		return "^"
+	case "~":
+		return "^"
+	case "<<":
+		return "<<"
+	case ">>":
+		return ">>"
 	default:
 		return op // +, -, *, /, <, >, <=, >= are the same
 	}

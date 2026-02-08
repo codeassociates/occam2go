@@ -816,6 +816,84 @@ SEQ
 	}
 }
 
+func TestE2E_BitwiseAnd(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 12 /\ 10
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "8\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_BitwiseOr(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 12 \/ 10
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "14\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_BitwiseXor(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 12 >< 10
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "6\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_BitwiseNot(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := ~ 0
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_LeftShift(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 1 << 4
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "16\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_RightShift(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 16 >> 2
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_AfterExpression(t *testing.T) {
 	// Test AFTER as a boolean expression in IF
 	occam := `SEQ

@@ -31,6 +31,12 @@ const (
 	SEND      // !
 	RECEIVE   // ?
 	AMPERSAND // & (guard separator in ALT)
+	BITAND    // /\  (bitwise AND)
+	BITOR     // \/  (bitwise OR)
+	BITXOR    // ><  (bitwise XOR)
+	BITNOT    // ~   (bitwise NOT)
+	LSHIFT    // <<  (left shift)
+	RSHIFT    // >>  (right shift)
 
 	// Delimiters
 	LPAREN    // (
@@ -102,6 +108,12 @@ var tokenNames = map[TokenType]string{
 	SEND:      "!",
 	RECEIVE:   "?",
 	AMPERSAND: "&",
+	BITAND:    "/\\",
+	BITOR:     "\\/",
+	BITXOR:    "><",
+	BITNOT:    "~",
+	LSHIFT:    "<<",
+	RSHIFT:    ">>",
 
 	LPAREN:    "(",
 	RPAREN:    ")",

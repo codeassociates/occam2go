@@ -97,6 +97,8 @@ See [TODO.md](TODO.md) for the full implementation status and roadmap.
 | Arithmetic: `+`, `-`, `*`, `/`, `\` | `+`, `-`, `*`, `/`, `%` |
 | Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=` | `==`, `!=`, `<`, `>`, `<=`, `>=` |
 | Logic: `AND`, `OR`, `NOT` | `&&`, `\|\|`, `!` |
+| Bitwise: `/\`, `\/`, `><`, `~` | `&`, `\|`, `^`, `^` (AND, OR, XOR, NOT) |
+| Shifts: `<<`, `>>` | `<<`, `>>` |
 
 ### Channels
 

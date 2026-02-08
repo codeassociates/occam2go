@@ -148,6 +148,79 @@ x := 5
 	}
 }
 
+func TestBitwiseOperators(t *testing.T) {
+	input := "a /\\ b\n"
+	l := New(input)
+	expected := []struct {
+		typ TokenType
+		lit string
+	}{
+		{IDENT, "a"},
+		{BITAND, "/\\"},
+		{IDENT, "b"},
+		{NEWLINE, "\\n"},
+		{EOF, ""},
+	}
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.typ {
+			t.Fatalf("bitand[%d] - type wrong. expected=%q, got=%q (literal=%q)",
+				i, exp.typ, tok.Type, tok.Literal)
+		}
+		if tok.Literal != exp.lit {
+			t.Fatalf("bitand[%d] - literal wrong. expected=%q, got=%q",
+				i, exp.lit, tok.Literal)
+		}
+	}
+
+	// Test all bitwise operators in sequence
+	input2 := "a \\/ b >< c ~ d << e >> f\n"
+	l2 := New(input2)
+	expected2 := []struct {
+		typ TokenType
+		lit string
+	}{
+		{IDENT, "a"},
+		{BITOR, "\\/"},
+		{IDENT, "b"},
+		{BITXOR, "><"},
+		{IDENT, "c"},
+		{BITNOT, "~"},
+		{IDENT, "d"},
+		{LSHIFT, "<<"},
+		{IDENT, "e"},
+		{RSHIFT, ">>"},
+		{IDENT, "f"},
+		{NEWLINE, "\\n"},
+		{EOF, ""},
+	}
+	for i, exp := range expected2 {
+		tok := l2.NextToken()
+		if tok.Type != exp.typ {
+			t.Fatalf("bitwise[%d] - type wrong. expected=%q, got=%q (literal=%q)",
+				i, exp.typ, tok.Type, tok.Literal)
+		}
+		if tok.Literal != exp.lit {
+			t.Fatalf("bitwise[%d] - literal wrong. expected=%q, got=%q",
+				i, exp.lit, tok.Literal)
+		}
+	}
+}
+
+func TestBitwiseVsArithmetic(t *testing.T) {
+	// Ensure / alone is still DIVIDE and \ alone is still MODULO
+	input := "a / b \\ c\n"
+	l := New(input)
+	expected := []TokenType{IDENT, DIVIDE, IDENT, MODULO, IDENT, NEWLINE, EOF}
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp {
+			t.Fatalf("tests[%d] - type wrong. expected=%q, got=%q (literal=%q)",
+				i, exp, tok.Type, tok.Literal)
+		}
+	}
+}
+
 func TestNestedIndentation(t *testing.T) {
 	input := `SEQ
   INT x:

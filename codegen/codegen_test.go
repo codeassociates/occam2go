@@ -181,6 +181,27 @@ func transpile(t *testing.T, input string) string {
 	return gen.Generate(program)
 }
 
+func TestBitwiseOperators(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x := a /\\ b\n", "x = (a & b)"},
+		{"x := a \\/ b\n", "x = (a | b)"},
+		{"x := a >< b\n", "x = (a ^ b)"},
+		{"x := a << 2\n", "x = (a << 2)"},
+		{"x := a >> 2\n", "x = (a >> 2)"},
+		{"x := ~ a\n", "x = ^a"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
+
 func TestStringLiteral(t *testing.T) {
 	input := `x := "hello world"
 `

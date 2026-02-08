@@ -37,6 +37,11 @@ var precedences = map[lexer.TokenType]int{
 	lexer.MULTIPLY: PRODUCT,
 	lexer.DIVIDE:   PRODUCT,
 	lexer.MODULO:   PRODUCT,
+	lexer.BITAND:   PRODUCT,
+	lexer.LSHIFT:   PRODUCT,
+	lexer.RSHIFT:   PRODUCT,
+	lexer.BITOR:    SUM,
+	lexer.BITXOR:   SUM,
 	lexer.LBRACKET: INDEX,
 }
 
@@ -1236,6 +1241,14 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Operator: "NOT",
 			Right:    p.parseExpression(PREFIX),
 		}
+	case lexer.BITNOT:
+		token := p.curToken
+		p.nextToken()
+		left = &ast.UnaryExpr{
+			Token:    token,
+			Operator: "~",
+			Right:    p.parseExpression(PREFIX),
+		}
 	default:
 		p.addError(fmt.Sprintf("unexpected token in expression: %s", p.curToken.Type))
 		return nil
@@ -1248,7 +1261,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		switch p.peekToken.Type {
 		case lexer.PLUS, lexer.MINUS, lexer.MULTIPLY, lexer.DIVIDE, lexer.MODULO,
 			lexer.EQ, lexer.NEQ, lexer.LT, lexer.GT, lexer.LE, lexer.GE,
-			lexer.AND, lexer.OR, lexer.AFTER:
+			lexer.AND, lexer.OR, lexer.AFTER,
+			lexer.BITAND, lexer.BITOR, lexer.BITXOR, lexer.LSHIFT, lexer.RSHIFT:
 			p.nextToken()
 			left = p.parseBinaryExpr(left)
 		case lexer.LBRACKET:

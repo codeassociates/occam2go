@@ -43,7 +43,7 @@
 | Feature | Notes |
 |---------|-------|
 | **STOP** | Token exists in lexer but not parsed. Occam's deadlock/termination primitive. |
-| **Bitwise operators** | No bitwise AND, OR, XOR, or shift operators. |
+| ~~**Bitwise operators**~~ | Implemented. `/\` (AND), `\/` (OR), `><` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift). |
 | **Type conversions** | No explicit casting (e.g., `INT x` converting BYTE to INT). |
 
 ### Data Structures

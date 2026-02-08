@@ -103,9 +103,23 @@ func (l *Lexer) NextToken() Token {
 	case '*':
 		tok = l.newToken(MULTIPLY, l.ch)
 	case '/':
-		tok = l.newToken(DIVIDE, l.ch)
+		if l.peekChar() == '\\' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: BITAND, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
+		} else {
+			tok = l.newToken(DIVIDE, l.ch)
+		}
 	case '\\':
-		tok = l.newToken(MODULO, l.ch)
+		if l.peekChar() == '/' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: BITOR, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
+		} else {
+			tok = l.newToken(MODULO, l.ch)
+		}
+	case '~':
+		tok = l.newToken(BITNOT, l.ch)
 	case '=':
 		tok = l.newToken(EQ, l.ch)
 	case '!':
@@ -131,6 +145,10 @@ func (l *Lexer) NextToken() Token {
 			ch := l.ch
 			l.readChar()
 			tok = Token{Type: NEQ, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
+		} else if l.peekChar() == '<' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: LSHIFT, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
 		} else {
 			tok = l.newToken(LT, l.ch)
 		}
@@ -139,6 +157,14 @@ func (l *Lexer) NextToken() Token {
 			ch := l.ch
 			l.readChar()
 			tok = Token{Type: GE, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
+		} else if l.peekChar() == '>' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: RSHIFT, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
+		} else if l.peekChar() == '<' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: BITXOR, Literal: string(ch) + string(l.ch), Line: l.line, Column: l.column - 1}
 		} else {
 			tok = l.newToken(GT, l.ch)
 		}
