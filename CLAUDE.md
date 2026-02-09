@@ -61,7 +61,9 @@ Four packages, one pipeline:
 | `TIMER` / `tim ? t` | `time.Now().UnixMicro()` |
 | `=` / `<>` | `==` / `!=` |
 | `AND` / `OR` / `NOT` | `&&` / `||` / `!` |
+| `REAL32 x:` / `REAL64 x:` | `var x float32` / `var x float64` |
 | `INT expr`, `BYTE expr`, etc. | `int(expr)`, `byte(expr)`, etc. (type conversions) |
+| `REAL32 expr` / `REAL64 expr` | `float32(expr)` / `float64(expr)` (type conversions) |
 | `PROTOCOL X IS INT` | `type _proto_X = int` (simple protocol) |
 | `PROTOCOL X IS INT ; BYTE` | `type _proto_X struct { _0 int; _1 byte }` (sequential) |
 | `PROTOCOL X CASE tag; INT ...` | Interface + concrete structs per tag (variant) |
@@ -113,7 +115,7 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, etc.), string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
 
 ## Not Yet Implemented
 

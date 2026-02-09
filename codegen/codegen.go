@@ -792,6 +792,10 @@ func (g *Generator) occamTypeToGoBase(occamType string) string {
 		return "bool"
 	case "REAL":
 		return "float64"
+	case "REAL32":
+		return "float32"
+	case "REAL64":
+		return "float64"
 	default:
 		return occamType
 	}
@@ -806,6 +810,10 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 	case "BOOL":
 		return "bool"
 	case "REAL":
+		return "float64"
+	case "REAL32":
+		return "float32"
+	case "REAL64":
 		return "float64"
 	default:
 		// Check if it's a protocol name

@@ -28,6 +28,26 @@ func TestMultipleVarDecl(t *testing.T) {
 	}
 }
 
+func TestReal32VarDecl(t *testing.T) {
+	input := `REAL32 x:
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "var x float32") {
+		t.Errorf("expected 'var x float32' in output, got:\n%s", output)
+	}
+}
+
+func TestReal64VarDecl(t *testing.T) {
+	input := `REAL64 x:
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "var x float64") {
+		t.Errorf("expected 'var x float64' in output, got:\n%s", output)
+	}
+}
+
 func TestAssignment(t *testing.T) {
 	input := `x := 42
 `
@@ -236,6 +256,8 @@ func TestTypeConversion(t *testing.T) {
 		{"x := BYTE n\n", "x = byte(n)"},
 		{"x := REAL count\n", "x = float64(count)"},
 		{"x := BOOL flag\n", "x = bool(flag)"},
+		{"x := REAL32 y\n", "x = float32(y)"},
+		{"x := REAL64 y\n", "x = float64(y)"},
 	}
 
 	for _, tt := range tests {

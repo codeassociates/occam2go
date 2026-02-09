@@ -157,7 +157,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	}
 
 	switch p.curToken.Type {
-	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) {
 			return p.parseFuncDecl()
 		}
@@ -290,7 +290,8 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 		// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
 		p.nextToken()
 		if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-			p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+			p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+			p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
 			chanDecl.ElemType = p.curToken.Literal
 		} else if p.curTokenIs(lexer.IDENT) {
 			chanDecl.ElemType = p.curToken.Literal
@@ -323,10 +324,11 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 	// Regular array declaration
 	decl := &ast.ArrayDecl{Token: lbracketToken, Size: size}
 
-	// Expect type (INT, BYTE, BOOL, REAL)
+	// Expect type (INT, BYTE, BOOL, REAL, REAL32, REAL64)
 	p.nextToken()
 	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
+		!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
 		p.addError(fmt.Sprintf("expected type after array size, got %s", p.curToken.Type))
 		return nil
 	}
@@ -485,7 +487,8 @@ func (p *Parser) parseChanDecl() *ast.ChanDecl {
 	// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
 	p.nextToken()
 	if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+		p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
 		decl.ElemType = p.curToken.Literal
 	} else if p.curTokenIs(lexer.IDENT) {
 		decl.ElemType = p.curToken.Literal
@@ -595,6 +598,10 @@ func (p *Parser) parseProtocolTypeName() string {
 		return "BOOL"
 	case lexer.REAL_TYPE:
 		return "REAL"
+	case lexer.REAL32_TYPE:
+		return "REAL32"
+	case lexer.REAL64_TYPE:
+		return "REAL64"
 	case lexer.IDENT:
 		return p.curToken.Literal
 	default:
@@ -732,9 +739,10 @@ func (p *Parser) parseRecordDecl() *ast.RecordDecl {
 			break
 		}
 
-		// Expect a type keyword (INT, BYTE, BOOL, REAL)
+		// Expect a type keyword (INT, BYTE, BOOL, REAL, REAL32, REAL64)
 		if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-			!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+			!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
+			!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
 			p.addError(fmt.Sprintf("expected type in record field, got %s", p.curToken.Type))
 			return nil
 		}
@@ -1509,7 +1517,8 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			}
 			p.nextToken() // move to element type
 			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+				p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
 				param.ChanElemType = p.curToken.Literal
 			} else if p.curTokenIs(lexer.IDENT) {
 				param.ChanElemType = p.curToken.Literal
@@ -1526,7 +1535,8 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			}
 			p.nextToken() // move to element type
 			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+				p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
 				param.ChanElemType = p.curToken.Literal
 			} else if p.curTokenIs(lexer.IDENT) {
 				param.ChanElemType = p.curToken.Literal
@@ -1542,7 +1552,8 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 		} else {
 			// Expect scalar type
 			if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) {
+				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
+				!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
 				p.addError(fmt.Sprintf("expected type in parameter, got %s", p.curToken.Type))
 				return params
 			}
@@ -1659,7 +1670,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	// VALOF form: local declarations, then VALOF keyword, then body, then RESULT
 	// Parse local declarations (type keywords before VALOF)
 	for p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) {
+		p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+		p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
 		stmt := p.parseVarDecl()
 		if stmt != nil {
 			fn.Body = append(fn.Body, stmt)
@@ -1977,7 +1989,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Operator: "~",
 			Right:    p.parseExpression(PREFIX),
 		}
-	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE:
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		token := p.curToken
 		p.nextToken()
 		left = &ast.TypeConversion{

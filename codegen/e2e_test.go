@@ -957,6 +957,64 @@ func TestE2E_TypeConversionInExpression(t *testing.T) {
 	}
 }
 
+func TestE2E_Real32VarDecl(t *testing.T) {
+	occam := `SEQ
+  REAL32 x:
+  x := REAL32 5
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "5\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Real64VarDecl(t *testing.T) {
+	occam := `SEQ
+  REAL64 x:
+  x := REAL64 10
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Real32ToReal64Conversion(t *testing.T) {
+	occam := `SEQ
+  REAL32 a:
+  a := REAL32 7
+  REAL64 b:
+  b := REAL64 a
+  print.int(INT b)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Real32Array(t *testing.T) {
+	occam := `SEQ
+  [3]REAL32 arr:
+  arr[0] := REAL32 10
+  arr[1] := REAL32 20
+  arr[2] := REAL32 30
+  INT sum:
+  sum := (INT arr[0]) + (INT arr[1]) + (INT arr[2])
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "60\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_AfterExpression(t *testing.T) {
 	// Test AFTER as a boolean expression in IF
 	occam := `SEQ

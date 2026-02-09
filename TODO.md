@@ -12,7 +12,7 @@
 - **SKIP** — No-op process
 
 ### Data Types & Declarations
-- **INT, BYTE, BOOL, REAL** — Scalar types (REAL maps to float64)
+- **INT, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (REAL/REAL64 map to float64, REAL32 maps to float32)
 - **Variable declarations** — `INT x, y, z:`
 - **Arrays** — `[n]TYPE arr:` with index expressions
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`)
@@ -53,7 +53,7 @@
 |---------|-------|
 | ~~**Record types**~~ | Implemented. `RECORD POINT { INT x: INT y: }` → `type POINT struct { x int; y int }`. Field access via bracket syntax (`p[x]` → `p.x`). |
 | ~~**Channel arrays**~~ | Implemented. `[n]CHAN OF TYPE cs:` → `make([]chan T, n)` + init loop. Indexed send/receive (`cs[i] ! x`, `cs[i] ? x`), `[]CHAN OF TYPE` proc params, and ALT with indexed channels. |
-| **REAL32 / REAL64** | Only a single REAL type exists. Occam distinguishes the two. |
+| ~~**REAL32 / REAL64**~~ | Implemented. `REAL32` maps to `float32`, `REAL64` maps to `float64`. |
 
 ### Channel & Protocol Features
 
