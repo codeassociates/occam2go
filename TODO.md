@@ -39,27 +39,10 @@
 
 ## Not Yet Implemented
 
-### Core Language Gaps
-
-| Feature | Notes |
-|---------|-------|
-| ~~**STOP**~~ | Implemented. Maps to `fmt.Fprintln(os.Stderr, "STOP encountered")` + `select {}`. |
-| ~~**Bitwise operators**~~ | Implemented. `/\` (AND), `\/` (OR), `><` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift). |
-| ~~**Type conversions**~~ | Implemented. `INT x` → `int(x)`, `BYTE n` → `byte(n)`, `REAL x` → `float64(x)`. |
-
-### Data Structures
-
-| Feature | Notes |
-|---------|-------|
-| ~~**Record types**~~ | Implemented. `RECORD POINT { INT x: INT y: }` → `type POINT struct { x int; y int }`. Field access via bracket syntax (`p[x]` → `p.x`). |
-| ~~**Channel arrays**~~ | Implemented. `[n]CHAN OF TYPE cs:` → `make([]chan T, n)` + init loop. Indexed send/receive (`cs[i] ! x`, `cs[i] ? x`), `[]CHAN OF TYPE` proc params, and ALT with indexed channels. |
-| ~~**REAL32 / REAL64**~~ | Implemented. `REAL32` maps to `float32`, `REAL64` maps to `float64`. |
-
 ### Channel & Protocol Features
 
 | Feature | Notes |
 |---------|-------|
-| ~~**Protocols**~~ | Implemented. Simple (`PROTOCOL X IS INT`), sequential (`PROTOCOL X IS INT ; BYTE`), and variant (`PROTOCOL X CASE tag; INT ...`) protocols on channels. |
 | **Channel direction** | Restricting channel params to input-only (`?`) or output-only (`!`). Currently all channel params are bidirectional. |
 
 ### Language Constructs
@@ -71,13 +54,3 @@
 | **Complex ALT guards** | Only simple boolean + channel guards work currently. |
 | **PLACED PAR** | Assigning processes to specific hardware. |
 | **PORT OF** | Hardware port mapping. |
-
----
-
-## Suggested Priority
-
-1. ~~**Channel arrays**~~ — Implemented
-2. ~~**STOP**~~ — Implemented
-3. ~~**Bitwise operators**~~ — Implemented
-4. ~~**Protocols**~~ — Implemented
-5. ~~**Record types**~~ — Implemented
