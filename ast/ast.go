@@ -129,6 +129,7 @@ type ProcParam struct {
 	IsChan       bool   // true if this is a CHAN OF <type> parameter
 	IsChanArray  bool   // true for []CHAN OF TYPE params
 	ChanElemType string // element type when IsChan (e.g., "INT")
+	ChanDir      string // "?" for input, "!" for output, "" for bidirectional
 }
 
 // ProcCall represents a procedure call

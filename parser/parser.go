@@ -1568,6 +1568,12 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 		}
 		param.Name = p.curToken.Literal
 
+		// Check for channel direction marker (? or !)
+		if (param.IsChan || param.IsChanArray) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
+			p.nextToken()
+			param.ChanDir = p.curToken.Literal
+		}
+
 		params = append(params, param)
 
 		if !p.peekTokenIs(lexer.COMMA) {

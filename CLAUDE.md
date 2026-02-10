@@ -83,6 +83,8 @@ Four packages, one pipeline:
 | `cs[i] ! 42` | `cs[i] <- 42` |
 | `cs[i] ? x` | `x = <-cs[i]` |
 | `PROC f([]CHAN OF INT cs)` | `func f(cs []chan int)` |
+| `PROC f(CHAN OF INT c?)` | `func f(c <-chan int)` (input/receive-only) |
+| `PROC f(CHAN OF INT c!)` | `func f(c chan<- int)` (output/send-only) |
 | Non-VAL params | `*type` pointer params, callers pass `&arg` |
 
 ## Key Parser Patterns
@@ -115,8 +117,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
+SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
 
 ## Not Yet Implemented
 
-Channel direction restrictions, abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+Abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.

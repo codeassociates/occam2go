@@ -1041,9 +1041,9 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 	for _, p := range params {
 		var goType string
 		if p.IsChanArray {
-			goType = "[]chan " + g.occamTypeToGo(p.ChanElemType)
+			goType = "[]" + chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsChan {
-			goType = "chan " + g.occamTypeToGo(p.ChanElemType)
+			goType = chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
 		} else {
 			goType = g.occamTypeToGo(p.Type)
 			if !p.IsVal {
@@ -1054,6 +1054,17 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 		parts = append(parts, fmt.Sprintf("%s %s", p.Name, goType))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func chanDirPrefix(dir string) string {
+	switch dir {
+	case "?":
+		return "<-chan " // input/receive-only
+	case "!":
+		return "chan<- " // output/send-only
+	default:
+		return "chan " // bidirectional
+	}
 }
 
 func (g *Generator) generateProcCall(call *ast.ProcCall) {

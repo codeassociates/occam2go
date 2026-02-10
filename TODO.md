@@ -39,12 +39,6 @@
 
 ## Not Yet Implemented
 
-### Channel & Protocol Features
-
-| Feature | Notes |
-|---------|-------|
-| **Channel direction** | Restricting channel params to input-only (`?`) or output-only (`!`). Currently all channel params are bidirectional. |
-
 ### Language Constructs
 
 | Feature | Notes |

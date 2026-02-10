@@ -1300,3 +1300,26 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ChanDirParam(t *testing.T) {
+	occam := `PROC producer(CHAN OF INT output!)
+  output ! 42
+
+PROC consumer(CHAN OF INT input?)
+  SEQ
+    INT x:
+    input ? x
+    print.int(x)
+
+SEQ
+  CHAN OF INT c:
+  PAR
+    producer(c)
+    consumer(c)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

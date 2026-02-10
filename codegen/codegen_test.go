@@ -403,6 +403,34 @@ func TestChanArrayParamGen(t *testing.T) {
 	}
 }
 
+func TestChanDirParamGen(t *testing.T) {
+	input := `PROC worker(CHAN OF INT input?, CHAN OF INT output!)
+  SEQ
+    INT x:
+    input ? x
+    output ! x
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "func worker(input <-chan int, output chan<- int)") {
+		t.Errorf("expected directed channel types in output, got:\n%s", output)
+	}
+}
+
+func TestChanArrayDirParamGen(t *testing.T) {
+	input := `PROC worker([]CHAN OF INT cs?, []CHAN OF INT out!)
+  SKIP
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "cs []<-chan int") {
+		t.Errorf("expected '[]<-chan int' for input chan array, got:\n%s", output)
+	}
+	if !strings.Contains(output, "out []chan<- int") {
+		t.Errorf("expected '[]chan<- int' for output chan array, got:\n%s", output)
+	}
+}
+
 func TestRecordFieldAccessCodegen(t *testing.T) {
 	input := `RECORD POINT
   INT x:

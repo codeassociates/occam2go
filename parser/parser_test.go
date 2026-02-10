@@ -1666,6 +1666,79 @@ func TestChanArrayParam(t *testing.T) {
 	}
 }
 
+func TestChanDirParam(t *testing.T) {
+	input := `PROC worker(CHAN OF INT input?, CHAN OF INT output!)
+  SEQ
+    INT x:
+    input ? x
+    output ! x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(proc.Params))
+	}
+
+	// First param: CHAN OF INT input? (input direction)
+	p0 := proc.Params[0]
+	if !p0.IsChan {
+		t.Error("param 0: expected IsChan=true")
+	}
+	if p0.ChanDir != "?" {
+		t.Errorf("param 0: expected ChanDir=?, got %q", p0.ChanDir)
+	}
+	if p0.Name != "input" {
+		t.Errorf("param 0: expected Name=input, got %s", p0.Name)
+	}
+
+	// Second param: CHAN OF INT output! (output direction)
+	p1 := proc.Params[1]
+	if !p1.IsChan {
+		t.Error("param 1: expected IsChan=true")
+	}
+	if p1.ChanDir != "!" {
+		t.Errorf("param 1: expected ChanDir=!, got %q", p1.ChanDir)
+	}
+	if p1.Name != "output" {
+		t.Errorf("param 1: expected Name=output, got %s", p1.Name)
+	}
+}
+
+func TestChanArrayDirParam(t *testing.T) {
+	input := `PROC worker([]CHAN OF INT cs?)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	p0 := proc.Params[0]
+	if !p0.IsChanArray {
+		t.Error("param 0: expected IsChanArray=true")
+	}
+	if p0.ChanDir != "?" {
+		t.Errorf("param 0: expected ChanDir=?, got %q", p0.ChanDir)
+	}
+}
+
 func TestSequentialReceive(t *testing.T) {
 	input := `c ? x ; y
 `
