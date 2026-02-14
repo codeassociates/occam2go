@@ -29,7 +29,7 @@ Here's how to transpile, compile, and run an Occam program:
 go build -o occam2go
 
 # 2. Transpile an Occam file to Go
-./occam2go examples/print.occ -o output.go
+./occam2go -o output.go examples/print.occ
 
 # 3. Compile the generated Go code
 go build -o output output.go
@@ -41,7 +41,7 @@ go build -o output output.go
 Or as a one-liner to see the output immediately:
 
 ```bash
-./occam2go examples/print.occ -o output.go && go run output.go
+./occam2go -o output.go examples/print.occ && go run output.go
 ```
 
 ## Example
