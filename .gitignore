@@ -30,3 +30,6 @@ Thumbs.db
 
 # Generated Go files from examples
 examples/*.go
+
+# External repositories
+kroc/
