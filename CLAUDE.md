@@ -74,6 +74,9 @@ Six packages, one pipeline:
 | `c ? x` | `x = <-c` |
 | `PROC name(...)` | `func name(...)` |
 | `INT FUNCTION name(...) IS expr` | `func name(...) int { return expr }` |
+| `INT, INT FUNCTION name(...)` | `func name(...) (int, int) { ... }` |
+| `RESULT expr1, expr2` | `return expr1, expr2` |
+| `a, b := func(...)` | `a, b = func(...)` (multi-assignment) |
 | `TIMER` / `tim ? t` | `time.Now().UnixMicro()` |
 | `=` / `<>` | `==` / `!=` |
 | `AND` / `OR` / `NOT` | `&&` / `||` / `!` |
@@ -143,7 +146,7 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator.
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator.
 
 ## Not Yet Implemented
 

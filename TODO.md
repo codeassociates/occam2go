@@ -74,7 +74,7 @@ These features are needed to transpile the KRoC course module (`kroc/modules/cou
 | ~~**Occam escape sequences**~~ | ~~`*n` (newline), `*c` (carriage return), `*t` (tab) — occam uses `*` not `\` for escapes in strings and byte literals.~~ **DONE** | utils.occ, file_in.occ |
 | ~~**PROC terminator `:`**~~ | ~~Standalone `:` at the end of a PROC/FUNCTION body (KRoC style).~~ **DONE** | all .occ files |
 | **Nested PROCs/FUNCTIONs** | Local PROC/FUNCTION definitions inside a PROC body. | float_io.occ, stringbuf.occ |
-| **Multi-result FUNCTIONs** | `INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`. | random.occ, utils.occ, string.occ, float_io.occ |
+| ~~**Multi-result FUNCTIONs**~~ | ~~`INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`.~~ **DONE** | random.occ, utils.occ, string.occ, float_io.occ |
 | ~~**Replicated IF**~~ | ~~`IF i = 0 FOR n` — replicated conditional.~~ **DONE** | utils.occ, file_in.occ, string.occ, float_io.occ |
 | ~~**Hex integer literals**~~ | ~~`#FF`, `#80000000` — prefixed with `#`.~~ **DONE** | float_io.occ, stringbuf.occ |
 | **Checked arithmetic** | `TIMES`, `PLUS`, `MINUS` — modular (wrapping) arithmetic operators. | demo_cycles.occ, random.occ, utils.occ |

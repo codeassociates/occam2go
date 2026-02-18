@@ -65,6 +65,16 @@ type Assignment struct {
 func (a *Assignment) statementNode()       {}
 func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
 
+// MultiAssignment represents a multi-target assignment: a, b := func(x)
+type MultiAssignment struct {
+	Token   lexer.Token  // the := token
+	Targets []string     // variable names on the left side
+	Values  []Expression // expressions on the right side
+}
+
+func (m *MultiAssignment) statementNode()       {}
+func (m *MultiAssignment) TokenLiteral() string { return m.Token.Literal }
+
 // SeqBlock represents a SEQ block (sequential execution)
 // If Replicator is non-nil, this is a replicated SEQ (SEQ i = 0 FOR n)
 type SeqBlock struct {
@@ -143,14 +153,14 @@ type ProcCall struct {
 func (p *ProcCall) statementNode()       {}
 func (p *ProcCall) TokenLiteral() string { return p.Token.Literal }
 
-// FuncDecl represents a function declaration
+// FuncDecl represents a function declaration (single or multi-result)
 type FuncDecl struct {
-	Token      lexer.Token // the return type token
-	ReturnType string      // "INT", "BYTE", "BOOL", "REAL"
-	Name       string
-	Params     []ProcParam
-	Body       []Statement // local decls + body statements (VALOF form), empty for IS form
-	ResultExpr Expression  // the return expression (from IS or RESULT)
+	Token       lexer.Token    // the return type token
+	ReturnTypes []string       // return types: ["INT"], ["INT", "INT"], etc.
+	Name        string
+	Params      []ProcParam
+	Body        []Statement    // local decls + body statements (VALOF form), empty for IS form
+	ResultExprs []Expression   // return expressions (from IS or RESULT)
 }
 
 func (f *FuncDecl) statementNode()       {}

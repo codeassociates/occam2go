@@ -703,8 +703,8 @@ func TestFuncDeclIS(t *testing.T) {
 		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
 	}
 
-	if fn.ReturnType != "INT" {
-		t.Errorf("expected return type INT, got %s", fn.ReturnType)
+	if len(fn.ReturnTypes) != 1 || fn.ReturnTypes[0] != "INT" {
+		t.Errorf("expected return types [INT], got %v", fn.ReturnTypes)
 	}
 
 	if fn.Name != "square" {
@@ -719,8 +719,8 @@ func TestFuncDeclIS(t *testing.T) {
 		t.Errorf("expected VAL INT x, got %+v", fn.Params[0])
 	}
 
-	if fn.ResultExpr == nil {
-		t.Fatal("expected result expression, got nil")
+	if len(fn.ResultExprs) != 1 {
+		t.Fatalf("expected 1 result expression, got %d", len(fn.ResultExprs))
 	}
 
 	if len(fn.Body) != 0 {
@@ -753,8 +753,8 @@ func TestFuncDeclValof(t *testing.T) {
 		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
 	}
 
-	if fn.ReturnType != "INT" {
-		t.Errorf("expected return type INT, got %s", fn.ReturnType)
+	if len(fn.ReturnTypes) != 1 || fn.ReturnTypes[0] != "INT" {
+		t.Errorf("expected return types [INT], got %v", fn.ReturnTypes)
 	}
 
 	if fn.Name != "max" {
@@ -765,13 +765,92 @@ func TestFuncDeclValof(t *testing.T) {
 		t.Fatalf("expected 2 params, got %d", len(fn.Params))
 	}
 
-	if fn.ResultExpr == nil {
-		t.Fatal("expected result expression, got nil")
+	if len(fn.ResultExprs) != 1 {
+		t.Fatalf("expected 1 result expression, got %d", len(fn.ResultExprs))
 	}
 
 	// Body should contain local var decl and the IF statement
 	if len(fn.Body) < 1 {
 		t.Fatal("expected at least 1 statement in body")
+	}
+}
+
+func TestMultiResultFuncDecl(t *testing.T) {
+	input := `INT, INT FUNCTION swap(VAL INT a, VAL INT b)
+  INT x, y:
+  VALOF
+    SEQ
+      x := b
+      y := a
+    RESULT x, y
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	fn, ok := program.Statements[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
+	}
+
+	if len(fn.ReturnTypes) != 2 || fn.ReturnTypes[0] != "INT" || fn.ReturnTypes[1] != "INT" {
+		t.Errorf("expected return types [INT, INT], got %v", fn.ReturnTypes)
+	}
+
+	if fn.Name != "swap" {
+		t.Errorf("expected name 'swap', got %s", fn.Name)
+	}
+
+	if len(fn.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(fn.Params))
+	}
+
+	if len(fn.ResultExprs) != 2 {
+		t.Fatalf("expected 2 result expressions, got %d", len(fn.ResultExprs))
+	}
+
+	if len(fn.Body) < 1 {
+		t.Fatal("expected at least 1 statement in body")
+	}
+}
+
+func TestMultiAssignment(t *testing.T) {
+	input := `a, b := swap(1, 2)
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ma, ok := program.Statements[0].(*ast.MultiAssignment)
+	if !ok {
+		t.Fatalf("expected MultiAssignment, got %T", program.Statements[0])
+	}
+
+	if len(ma.Targets) != 2 || ma.Targets[0] != "a" || ma.Targets[1] != "b" {
+		t.Errorf("expected targets [a, b], got %v", ma.Targets)
+	}
+
+	if len(ma.Values) != 1 {
+		t.Fatalf("expected 1 value expression, got %d", len(ma.Values))
+	}
+
+	fc, ok := ma.Values[0].(*ast.FuncCall)
+	if !ok {
+		t.Fatalf("expected FuncCall value, got %T", ma.Values[0])
+	}
+
+	if fc.Name != "swap" {
+		t.Errorf("expected function name 'swap', got %s", fc.Name)
 	}
 }
 
