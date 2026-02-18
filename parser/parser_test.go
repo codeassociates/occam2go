@@ -1953,3 +1953,51 @@ func TestAbbreviationWithExpression(t *testing.T) {
 		t.Fatalf("expected BinaryExpr, got %T", abbr.Value)
 	}
 }
+
+func TestOpenArrayParam(t *testing.T) {
+	input := `PROC sum.array(VAL []INT arr, INT result)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(proc.Params))
+	}
+
+	p0 := proc.Params[0]
+	if !p0.IsVal {
+		t.Error("param 0: expected IsVal=true")
+	}
+	if !p0.IsOpenArray {
+		t.Error("param 0: expected IsOpenArray=true")
+	}
+	if p0.Type != "INT" {
+		t.Errorf("param 0: expected Type=INT, got %s", p0.Type)
+	}
+	if p0.Name != "arr" {
+		t.Errorf("param 0: expected Name=arr, got %s", p0.Name)
+	}
+
+	p1 := proc.Params[1]
+	if p1.IsOpenArray {
+		t.Error("param 1: expected IsOpenArray=false")
+	}
+	if p1.IsVal {
+		t.Error("param 1: expected IsVal=false")
+	}
+	if p1.Type != "INT" {
+		t.Errorf("param 1: expected Type=INT, got %s", p1.Type)
+	}
+}

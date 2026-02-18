@@ -1011,7 +1011,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	oldRefParams := g.refParams
 	g.refParams = make(map[string]bool)
 	for _, p := range proc.Params {
-		if !p.IsVal && !p.IsChan && !p.IsChanArray {
+		if !p.IsVal && !p.IsChan && !p.IsChanArray && !p.IsOpenArray {
 			g.refParams[p.Name] = true
 		}
 		// Register chan params with protocol mappings
@@ -1053,6 +1053,8 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 			goType = "[]" + chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsChan {
 			goType = chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
+		} else if p.IsOpenArray {
+			goType = "[]" + g.occamTypeToGo(p.Type)
 		} else {
 			goType = g.occamTypeToGo(p.Type)
 			if !p.IsVal {
@@ -1096,7 +1098,7 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
 		// Channels and channel arrays are already reference types, so no & needed
-		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray {
+		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray && !params[i].IsOpenArray {
 			g.write("&")
 		}
 		g.generateExpression(arg)

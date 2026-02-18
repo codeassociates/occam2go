@@ -1440,6 +1440,25 @@ func TestE2E_SizeString(t *testing.T) {
 	}
 }
 
+func TestE2E_OpenArrayParam(t *testing.T) {
+	occam := `PROC printarray(VAL []INT arr)
+  SEQ i = 0 FOR SIZE arr
+    print.int(arr[i])
+SEQ
+  [3]INT nums:
+  SEQ
+    nums[0] := 10
+    nums[1] := 20
+    nums[2] := 30
+  printarray(nums)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n20\n30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ValAbbreviation(t *testing.T) {
 	occam := `SEQ
   VAL INT x IS 42:
