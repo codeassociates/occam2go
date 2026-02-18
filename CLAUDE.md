@@ -13,32 +13,48 @@ go test ./lexer                  # lexer unit tests only
 go test ./codegen -run TestE2E   # e2e tests only
 ```
 
-Usage: `./occam2go [-o output.go] input.occ`
+Usage:
+```bash
+./occam2go [-o output.go] [-I includepath]... [-D SYMBOL]... input.occ
+./occam2go gen-module [-o output] [-name GUARD] <SConscript>
+```
+
+Example with `#INCLUDE`:
+```bash
+./occam2go -I examples -o include_demo.go examples/include_demo.occ
+go run include_demo.go
+```
 
 ## Architecture
 
 ```
-lexer/ → parser/ → ast/ → codegen/
+preproc/ → lexer/ → parser/ → ast/ → codegen/
 ```
 
-Four packages, one pipeline:
+Six packages, one pipeline:
 
-1. **`lexer/`** — Tokenizer with indentation tracking. Produces `INDENT`/`DEDENT` tokens from whitespace changes (2-space indent = 1 level). Key files:
+1. **`preproc/`** — Textual preprocessor (pre-lexer pass). Handles `#IF`/`#ELSE`/`#ENDIF`/`#DEFINE` conditional compilation, `#INCLUDE` file inclusion with search paths, and ignores `#COMMENT`/`#PRAGMA`/`#USE`. Produces a single expanded string for the lexer.
+   - `preproc.go` — Preprocessor with condition stack and expression evaluator
+
+2. **`lexer/`** — Tokenizer with indentation tracking. Produces `INDENT`/`DEDENT` tokens from whitespace changes (2-space indent = 1 level). Key files:
    - `token.go` — Token types and keyword lookup
    - `lexer.go` — Lexer with `indentStack` and `pendingTokens` queue
 
-2. **`parser/`** — Recursive descent parser with Pratt expression parsing. Produces AST.
+3. **`parser/`** — Recursive descent parser with Pratt expression parsing. Produces AST.
    - `parser.go` — All parsing logic in one file
 
-3. **`ast/`** — AST node definitions. Every construct has a struct.
+4. **`ast/`** — AST node definitions. Every construct has a struct.
    - `ast.go` — All node types: `Program`, `SeqBlock`, `ParBlock`, `VarDecl`, `Assignment`, `ProcDecl`, `FuncDecl`, etc.
 
-4. **`codegen/`** — AST → Go source code. Two-pass: first collects metadata (imports, proc signatures), then generates.
+5. **`codegen/`** — AST → Go source code. Two-pass: first collects metadata (imports, proc signatures), then generates.
    - `codegen.go` — Generator with `strings.Builder` output
    - `codegen_test.go` — Unit tests (transpile, check output strings)
    - `e2e_test.go` — End-to-end tests (transpile → `go build` → execute → check stdout)
 
-5. **`main.go`** — CLI entry point wiring the pipeline together
+6. **`modgen/`** — Generates `.module` files from KRoC SConscript build files. Parses Python-based SConscript to extract source lists and `OccamLibrary` calls.
+   - `modgen.go` — SConscript parser and module file generator
+
+7. **`main.go`** — CLI entry point wiring the pipeline together
 
 ## Occam → Go Mapping
 
@@ -86,6 +102,10 @@ Four packages, one pipeline:
 | `PROC f(CHAN OF INT c?)` | `func f(c <-chan int)` (input/receive-only) |
 | `PROC f(CHAN OF INT c!)` | `func f(c chan<- int)` (output/send-only) |
 | Non-VAL params | `*type` pointer params, callers pass `&arg` |
+| `#INCLUDE "file"` | Textual inclusion (preprocessor, pre-lexer) |
+| `#IF`/`#ELSE`/`#ENDIF` | Conditional compilation (preprocessor) |
+| `#DEFINE SYMBOL` | Define preprocessor symbol |
+| `#COMMENT`/`#PRAGMA`/`#USE` | Ignored (blank line) |
 
 ## Key Parser Patterns
 
@@ -117,7 +137,7 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax).
 
 ## Not Yet Implemented
 

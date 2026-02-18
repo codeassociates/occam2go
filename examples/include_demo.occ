@@ -1,0 +1,14 @@
+-- Demonstrates using #INCLUDE to import a module.
+--
+-- Transpile and run:
+--   ./occam2go -I examples -o include_demo.go examples/include_demo.occ
+--   go run include_demo.go
+--
+-- The -I flag tells the preprocessor where to search for included files.
+
+#INCLUDE "mathlib.module"
+
+SEQ
+  print.int(abs(0 - 42))
+  print.int(max(10, 20))
+  print.int(min(10, 20))
