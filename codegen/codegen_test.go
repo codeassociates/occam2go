@@ -565,3 +565,30 @@ func TestAbbreviation(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiAssignmentSimple(t *testing.T) {
+	input := `a, b := 1, 2
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "a, b = 1, 2") {
+		t.Errorf("expected 'a, b = 1, 2' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiAssignmentIndexed(t *testing.T) {
+	input := `x[0], x[1] := x[1], x[0]
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "x[0], x[1] = x[1], x[0]") {
+		t.Errorf("expected 'x[0], x[1] = x[1], x[0]' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiAssignmentMixed(t *testing.T) {
+	input := `a, x[0] := 1, 2
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "a, x[0] = 1, 2") {
+		t.Errorf("expected 'a, x[0] = 1, 2' in output, got:\n%s", output)
+	}
+}
