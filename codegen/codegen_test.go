@@ -463,3 +463,21 @@ func TestSizeOperator(t *testing.T) {
 		}
 	}
 }
+
+func TestAbbreviation(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"VAL INT x IS 42:\n", "x := 42"},
+		{"VAL BOOL flag IS TRUE:\n", "flag := true"},
+		{"INT y IS z:\n", "y := z"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}

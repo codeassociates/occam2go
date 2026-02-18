@@ -445,12 +445,21 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateVariantReceive(s)
 	case *ast.RecordDecl:
 		g.generateRecordDecl(s)
+	case *ast.Abbreviation:
+		g.generateAbbreviation(s)
 	}
 }
 
 func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 	goType := g.occamTypeToGo(decl.Type)
 	g.writeLine(fmt.Sprintf("var %s %s", strings.Join(decl.Names, ", "), goType))
+}
+
+func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write(fmt.Sprintf("%s := ", abbr.Name))
+	g.generateExpression(abbr.Value)
+	g.write("\n")
 }
 
 func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
