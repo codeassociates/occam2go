@@ -335,3 +335,68 @@ func TestE2E_MostNegInExpression(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_CheckedArithmeticPLUS(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  SEQ
+    x := 3 PLUS 4
+    print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CheckedArithmeticMINUS(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  SEQ
+    x := 10 MINUS 3
+    print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CheckedArithmeticTIMES(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  SEQ
+    x := 6 TIMES 7
+    print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CheckedArithmeticWrapping(t *testing.T) {
+	// MOSTPOS INT PLUS 1 should wrap to MOSTNEG INT (modular arithmetic)
+	// Use a variable so Go doesn't detect constant overflow at compile time
+	occam := `SEQ
+  INT x:
+  SEQ
+    x := MOSTPOS INT
+    x := x PLUS 1
+    BOOL neg:
+    IF
+      x = (MOSTNEG INT)
+        neg := TRUE
+      TRUE
+        neg := FALSE
+    print.bool(neg)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "true\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

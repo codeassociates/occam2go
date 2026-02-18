@@ -90,6 +90,9 @@ const (
 	MOSTNEG_KW
 	MOSTPOS_KW
 	INITIAL
+	PLUS_KW  // PLUS (modular addition keyword, distinct from + symbol)
+	MINUS_KW // MINUS (modular subtraction keyword, distinct from - symbol)
+	TIMES    // TIMES (modular multiplication keyword)
 	keyword_end
 )
 
@@ -175,6 +178,9 @@ var tokenNames = map[TokenType]string{
 	MOSTNEG_KW: "MOSTNEG",
 	MOSTPOS_KW: "MOSTPOS",
 	INITIAL:    "INITIAL",
+	PLUS_KW:    "PLUS",
+	MINUS_KW:   "MINUS",
+	TIMES:      "TIMES",
 }
 
 var keywords = map[string]TokenType{
@@ -218,6 +224,9 @@ var keywords = map[string]TokenType{
 	"MOSTNEG":  MOSTNEG_KW,
 	"MOSTPOS":  MOSTPOS_KW,
 	"INITIAL":  INITIAL,
+	"PLUS":     PLUS_KW,
+	"MINUS":    MINUS_KW,
+	"TIMES":    TIMES,
 }
 
 func (t TokenType) String() string {

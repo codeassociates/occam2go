@@ -1725,6 +1725,12 @@ func (g *Generator) occamOpToGo(op string) string {
 		return "<<"
 	case ">>":
 		return ">>"
+	case "PLUS":
+		return "+"
+	case "MINUS":
+		return "-"
+	case "TIMES":
+		return "*"
 	default:
 		return op // +, -, *, /, <, >, <=, >= are the same
 	}
