@@ -1358,7 +1358,7 @@ func (p *Parser) parseParBlock() *ast.ParBlock {
 	return block
 }
 
-// parseReplicator parses: variable = start FOR count
+// parseReplicator parses: variable = start FOR count [STEP step]
 // Assumes the variable identifier has already been consumed and is in curToken
 func (p *Parser) parseReplicator() *ast.Replicator {
 	rep := &ast.Replicator{
@@ -1382,6 +1382,13 @@ func (p *Parser) parseReplicator() *ast.Replicator {
 	// Parse count expression
 	p.nextToken()
 	rep.Count = p.parseExpression(LOWEST)
+
+	// Optional STEP
+	if p.peekTokenIs(lexer.STEP) {
+		p.nextToken() // consume STEP
+		p.nextToken() // move to step expression
+		rep.Step = p.parseExpression(LOWEST)
+	}
 
 	return rep
 }

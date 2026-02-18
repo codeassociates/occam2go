@@ -86,6 +86,7 @@ const (
 	PROTOCOL
 	RECORD
 	SIZE_KW
+	STEP
 	keyword_end
 )
 
@@ -167,6 +168,7 @@ var tokenNames = map[TokenType]string{
 	PROTOCOL:  "PROTOCOL",
 	RECORD:    "RECORD",
 	SIZE_KW:   "SIZE",
+	STEP:      "STEP",
 }
 
 var keywords = map[string]TokenType{
@@ -206,6 +208,7 @@ var keywords = map[string]TokenType{
 	"PROTOCOL": PROTOCOL,
 	"RECORD":   RECORD,
 	"SIZE":     SIZE_KW,
+	"STEP":     STEP,
 }
 
 func (t TokenType) String() string {

@@ -461,6 +461,60 @@ func TestReplicatedSeq(t *testing.T) {
 	}
 }
 
+func TestReplicatedSeqWithStep(t *testing.T) {
+	input := `SEQ i = 0 FOR 5 STEP 2
+  print.int(i)
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	seq, ok := program.Statements[0].(*ast.SeqBlock)
+	if !ok {
+		t.Fatalf("expected SeqBlock, got %T", program.Statements[0])
+	}
+
+	if seq.Replicator == nil {
+		t.Fatal("expected replicator on SEQ block")
+	}
+
+	if seq.Replicator.Variable != "i" {
+		t.Errorf("expected variable 'i', got %s", seq.Replicator.Variable)
+	}
+
+	startLit, ok := seq.Replicator.Start.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for start, got %T", seq.Replicator.Start)
+	}
+	if startLit.Value != 0 {
+		t.Errorf("expected start 0, got %d", startLit.Value)
+	}
+
+	countLit2, ok := seq.Replicator.Count.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for count, got %T", seq.Replicator.Count)
+	}
+	if countLit2.Value != 5 {
+		t.Errorf("expected count 5, got %d", countLit2.Value)
+	}
+
+	if seq.Replicator.Step == nil {
+		t.Fatal("expected step on replicator")
+	}
+	stepLit, ok := seq.Replicator.Step.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for step, got %T", seq.Replicator.Step)
+	}
+	if stepLit.Value != 2 {
+		t.Errorf("expected step 2, got %d", stepLit.Value)
+	}
+}
+
 func TestReplicatedPar(t *testing.T) {
 	input := `PAR i = 0 FOR 3
   SKIP
