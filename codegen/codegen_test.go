@@ -556,6 +556,8 @@ func TestAbbreviation(t *testing.T) {
 		{"VAL INT x IS 42:\n", "x := 42"},
 		{"VAL BOOL flag IS TRUE:\n", "flag := true"},
 		{"INT y IS z:\n", "y := z"},
+		{"INITIAL INT x IS 42:\n", "x := 42"},
+		{"INITIAL BOOL done IS FALSE:\n", "done := false"},
 	}
 
 	for _, tt := range tests {

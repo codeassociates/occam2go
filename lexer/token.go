@@ -89,6 +89,7 @@ const (
 	STEP
 	MOSTNEG_KW
 	MOSTPOS_KW
+	INITIAL
 	keyword_end
 )
 
@@ -173,6 +174,7 @@ var tokenNames = map[TokenType]string{
 	STEP:       "STEP",
 	MOSTNEG_KW: "MOSTNEG",
 	MOSTPOS_KW: "MOSTPOS",
+	INITIAL:    "INITIAL",
 }
 
 var keywords = map[string]TokenType{
@@ -215,6 +217,7 @@ var keywords = map[string]TokenType{
 	"STEP":     STEP,
 	"MOSTNEG":  MOSTNEG_KW,
 	"MOSTPOS":  MOSTPOS_KW,
+	"INITIAL":  INITIAL,
 }
 
 func (t TokenType) String() string {

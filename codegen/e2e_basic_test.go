@@ -132,3 +132,17 @@ func TestE2E_StopNotTaken(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_InitialDecl(t *testing.T) {
+	occam := `SEQ
+  INITIAL INT x IS 10:
+  print.int(x)
+  x := x + 5
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
