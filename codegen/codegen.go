@@ -447,6 +447,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateRecordDecl(s)
 	case *ast.Abbreviation:
 		g.generateAbbreviation(s)
+	case *ast.MultiAssignment:
+		g.generateMultiAssignment(s)
 	}
 }
 
@@ -1108,19 +1110,36 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 }
 
 func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
-	goReturnType := g.occamTypeToGo(fn.ReturnType)
 	params := g.generateProcParams(fn.Params)
-	g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, goReturnType))
+
+	// Build return type string
+	var returnTypeStr string
+	if len(fn.ReturnTypes) == 1 {
+		returnTypeStr = g.occamTypeToGo(fn.ReturnTypes[0])
+	} else {
+		goTypes := make([]string, len(fn.ReturnTypes))
+		for i, rt := range fn.ReturnTypes {
+			goTypes[i] = g.occamTypeToGo(rt)
+		}
+		returnTypeStr = "(" + strings.Join(goTypes, ", ") + ")"
+	}
+
+	g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, returnTypeStr))
 	g.indent++
 
 	for _, stmt := range fn.Body {
 		g.generateStatement(stmt)
 	}
 
-	if fn.ResultExpr != nil {
+	if len(fn.ResultExprs) > 0 {
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
 		g.write("return ")
-		g.generateExpression(fn.ResultExpr)
+		for i, expr := range fn.ResultExprs {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.generateExpression(expr)
+		}
 		g.write("\n")
 	}
 
@@ -1139,6 +1158,19 @@ func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
 		g.generateExpression(arg)
 	}
 	g.write(")")
+}
+
+func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write(strings.Join(stmt.Targets, ", "))
+	g.write(" = ")
+	for i, val := range stmt.Values {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.generateExpression(val)
+	}
+	g.write("\n")
 }
 
 func (g *Generator) generatePrintCall(call *ast.ProcCall) {

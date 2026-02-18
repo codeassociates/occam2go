@@ -161,7 +161,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.VAL:
 		return p.parseAbbreviation()
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
-		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) {
+		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) || p.peekTokenIs(lexer.COMMA) {
 			return p.parseFuncDecl()
 		}
 		return p.parseVarDeclOrAbbreviation()
@@ -204,6 +204,9 @@ func (p *Parser) parseStatement() ast.Statement {
 		}
 		if p.peekTokenIs(lexer.ASSIGN) {
 			return p.parseAssignment()
+		}
+		if p.peekTokenIs(lexer.COMMA) {
+			return p.parseMultiAssignment()
 		}
 		if p.peekTokenIs(lexer.SEND) {
 			return p.parseSend()
@@ -358,6 +361,34 @@ func (p *Parser) parseAssignment() *ast.Assignment {
 
 	p.nextToken() // move past :=
 	stmt.Value = p.parseExpression(LOWEST)
+
+	return stmt
+}
+
+func (p *Parser) parseMultiAssignment() *ast.MultiAssignment {
+	stmt := &ast.MultiAssignment{
+		Targets: []string{p.curToken.Literal},
+	}
+
+	// Parse comma-separated targets: a, b, c
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next ident
+		stmt.Targets = append(stmt.Targets, p.curToken.Literal)
+	}
+
+	p.nextToken() // move to :=
+	stmt.Token = p.curToken
+
+	p.nextToken() // move past :=
+
+	// Parse comma-separated values
+	stmt.Values = []ast.Expression{p.parseExpression(LOWEST)}
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next expression
+		stmt.Values = append(stmt.Values, p.parseExpression(LOWEST))
+	}
 
 	return stmt
 }
@@ -1748,8 +1779,15 @@ func (p *Parser) parseProcCall() *ast.ProcCall {
 
 func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	fn := &ast.FuncDecl{
-		Token:      p.curToken,
-		ReturnType: p.curToken.Literal,
+		Token:       p.curToken,
+		ReturnTypes: []string{p.curToken.Literal},
+	}
+
+	// Parse additional return types for multi-result functions: INT, INT FUNCTION
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next type
+		fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
 	}
 
 	// Consume FUNCTION keyword
@@ -1791,7 +1829,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	// IS form: simple expression return
 	if p.curTokenIs(lexer.IS) {
 		p.nextToken() // move past IS
-		fn.ResultExpr = p.parseExpression(LOWEST)
+		fn.ResultExprs = []ast.Expression{p.parseExpression(LOWEST)}
 
 		// Consume remaining tokens and DEDENTs back to function's indentation level
 		for !p.curTokenIs(lexer.EOF) {
@@ -1853,10 +1891,15 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.nextToken()
 	}
 
-	// Parse RESULT expression
+	// Parse RESULT expression(s) — comma-separated for multi-result functions
 	if p.curTokenIs(lexer.RESULT) {
 		p.nextToken() // move past RESULT
-		fn.ResultExpr = p.parseExpression(LOWEST)
+		fn.ResultExprs = []ast.Expression{p.parseExpression(LOWEST)}
+		for p.peekTokenIs(lexer.COMMA) {
+			p.nextToken() // consume comma
+			p.nextToken() // move to next expression
+			fn.ResultExprs = append(fn.ResultExprs, p.parseExpression(LOWEST))
+		}
 	}
 
 	// Consume remaining tokens and DEDENTs back to function's indentation level

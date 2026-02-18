@@ -180,6 +180,52 @@ SEQ
 	}
 }
 
+func TestE2E_MultiResultFunction(t *testing.T) {
+	occam := `INT, INT FUNCTION swap(VAL INT a, VAL INT b)
+  INT x, y:
+  VALOF
+    SEQ
+      x := b
+      y := a
+    RESULT x, y
+
+SEQ
+  INT p, q:
+  p, q := swap(10, 20)
+  print.int(p)
+  print.int(q)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiResultFunctionThreeValues(t *testing.T) {
+	occam := `INT, INT, INT FUNCTION rotate(VAL INT a, VAL INT b, VAL INT c)
+  INT x, y, z:
+  VALOF
+    SEQ
+      x := b
+      y := c
+      z := a
+    RESULT x, y, z
+
+SEQ
+  INT p, q, r:
+  p, q, r := rotate(1, 2, 3)
+  print.int(p)
+  print.int(q)
+  print.int(r)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n3\n1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_NonValAbbreviation(t *testing.T) {
 	occam := `SEQ
   INT x:
