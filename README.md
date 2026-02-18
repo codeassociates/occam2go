@@ -14,10 +14,13 @@ go build -o occam2go
 
 ```bash
 ./occam2go [options] <input.occ>
+./occam2go gen-module [-o output] [-name GUARD] <SConscript>
 ```
 
 Options:
 - `-o <file>` - Write output to file (default: stdout)
+- `-I <path>` - Include search path for `#INCLUDE` resolution (repeatable)
+- `-D <SYMBOL>` - Predefined preprocessor symbol (repeatable, supports `SYMBOL=value`)
 - `-version` - Print version and exit
 
 ## Running an Example
@@ -300,6 +303,100 @@ PAR i = 0 FOR 4
 | `print.bool(x)` | `fmt.Println(x)` |
 | `print.string(x)` | `fmt.Println(x)` |
 | `print.newline()` | `fmt.Println()` |
+
+## Preprocessor and Modules
+
+Occam programs use `#INCLUDE` to import library modules. The transpiler includes a textual preprocessor that runs before lexing, handling conditional compilation and file inclusion.
+
+### Preprocessor Directives
+
+| Directive | Description |
+|-----------|-------------|
+| `#INCLUDE "file"` | Textually include a file (resolved relative to current file, then `-I` paths) |
+| `#DEFINE SYMBOL` | Define a preprocessor symbol |
+| `#IF expr` | Conditional compilation (`TRUE`, `FALSE`, `DEFINED (SYM)`, `NOT`, `(SYM = val)`) |
+| `#ELSE` | Alternative branch |
+| `#ENDIF` | End conditional block |
+| `#COMMENT`, `#PRAGMA`, `#USE` | Ignored (replaced with blank lines to preserve line numbers) |
+
+The predefined symbol `TARGET.BITS.PER.WORD` is set to `64` (Go always uses 64-bit integers).
+
+### Using Modules with `#INCLUDE`
+
+Create a module file with include guards to prevent double-inclusion:
+
+```occam
+-- mathlib.module
+#IF NOT (DEFINED (MATHLIB.MODULE))
+#DEFINE MATHLIB.MODULE
+
+INT FUNCTION abs(VAL INT x)
+  INT result:
+  VALOF
+    IF
+      x < 0
+        result := 0 - x
+      TRUE
+        result := x
+    RESULT result
+
+#ENDIF
+```
+
+Then include it in your program:
+
+```occam
+-- main.occ
+#INCLUDE "mathlib.module"
+
+SEQ
+  print.int(abs(0 - 42))
+```
+
+Transpile with `-I` to specify where to find the module:
+
+```bash
+./occam2go -I examples -o main.go examples/include_demo.occ
+go run main.go
+```
+
+Output:
+```
+42
+20
+10
+```
+
+A working example is provided in `examples/include_demo.occ` with `examples/mathlib.module`.
+
+### Generating Module Files from KRoC SConscript
+
+The KRoC project defines module composition in SConscript (Python) build files. The `gen-module` subcommand parses these to generate `.module` files:
+
+```bash
+# Clone the KRoC repository (one-time setup)
+./scripts/clone-kroc.sh
+
+# Generate a module file from SConscript
+./occam2go gen-module kroc/modules/course/libsrc/SConscript
+```
+
+This outputs:
+```
+#IF NOT (DEFINED (COURSE.MODULE))
+#DEFINE COURSE.MODULE
+#INCLUDE "consts.inc"
+#INCLUDE "utils.occ"
+#INCLUDE "string.occ"
+#INCLUDE "demo_cycles.occ"
+#INCLUDE "demo_nets.occ"
+#INCLUDE "file_in.occ"
+#INCLUDE "float_io.occ"
+#INCLUDE "random.occ"
+#ENDIF
+```
+
+> **Note:** The preprocessor and module infrastructure is in place, but the KRoC course module source files themselves use several occam features not yet supported by the transpiler (abbreviations like `VAL INT x IS 1:`, `CHAN BYTE` without `OF`, `VAL []BYTE` array slice params, `SIZE`, `:` PROC terminators). Full course module transpilation is a future goal. See [TODO.md](TODO.md) for the implementation roadmap.
 
 ## How Channels are Mapped
 

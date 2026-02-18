@@ -1,0 +1,38 @@
+-- A small utility module demonstrating #INCLUDE with include guards.
+-- This is a self-contained example; it does not depend on the KRoC
+-- course module (which uses occam features not yet supported by occam2go).
+
+#IF NOT (DEFINED (MATHLIB.MODULE))
+#DEFINE MATHLIB.MODULE
+
+INT FUNCTION abs(VAL INT x)
+  INT result:
+  VALOF
+    IF
+      x < 0
+        result := 0 - x
+      TRUE
+        result := x
+    RESULT result
+
+INT FUNCTION max(VAL INT a, VAL INT b)
+  INT result:
+  VALOF
+    IF
+      a > b
+        result := a
+      TRUE
+        result := b
+    RESULT result
+
+INT FUNCTION min(VAL INT a, VAL INT b)
+  INT result:
+  VALOF
+    IF
+      a < b
+        result := a
+      TRUE
+        result := b
+    RESULT result
+
+#ENDIF
