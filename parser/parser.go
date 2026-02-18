@@ -1848,6 +1848,41 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	return fn
 }
 
+// parseByteLiteralValue processes the raw content of a byte literal (between single quotes),
+// handling occam escape sequences (* prefix), and returns the resulting byte value.
+func (p *Parser) parseByteLiteralValue(raw string) (byte, error) {
+	if len(raw) == 0 {
+		return 0, fmt.Errorf("empty byte literal")
+	}
+	if raw[0] == '*' {
+		if len(raw) != 2 {
+			return 0, fmt.Errorf("invalid escape sequence in byte literal: '*%s'", raw[1:])
+		}
+		switch raw[1] {
+		case 'n':
+			return '\n', nil
+		case 'c':
+			return '\r', nil
+		case 't':
+			return '\t', nil
+		case 's':
+			return ' ', nil
+		case '*':
+			return '*', nil
+		case '\'':
+			return '\'', nil
+		case '"':
+			return '"', nil
+		default:
+			return 0, fmt.Errorf("unknown escape sequence in byte literal: '*%c'", raw[1])
+		}
+	}
+	if len(raw) != 1 {
+		return 0, fmt.Errorf("byte literal must be a single character, got %q", raw)
+	}
+	return raw[0], nil
+}
+
 func (p *Parser) parseFuncCallExpr() *ast.FuncCall {
 	call := &ast.FuncCall{
 		Token: p.curToken,
@@ -2081,6 +2116,13 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = &ast.BooleanLiteral{Token: p.curToken, Value: false}
 	case lexer.STRING:
 		left = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	case lexer.BYTE_LIT:
+		b, err := p.parseByteLiteralValue(p.curToken.Literal)
+		if err != nil {
+			p.addError(err.Error())
+			return nil
+		}
+		left = &ast.ByteLiteral{Token: p.curToken, Value: b}
 	case lexer.LPAREN:
 		p.nextToken()
 		left = p.parseExpression(LOWEST)

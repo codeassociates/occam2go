@@ -244,6 +244,15 @@ type StringLiteral struct {
 func (sl *StringLiteral) expressionNode()      {}
 func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
 
+// ByteLiteral represents a byte literal: 'A', '*n', etc.
+type ByteLiteral struct {
+	Token lexer.Token
+	Value byte
+}
+
+func (bl *ByteLiteral) expressionNode()      {}
+func (bl *ByteLiteral) TokenLiteral() string { return bl.Token.Literal }
+
 // BinaryExpr represents a binary operation: x + y
 type BinaryExpr struct {
 	Token    lexer.Token // the operator token

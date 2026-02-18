@@ -11,9 +11,10 @@ const (
 	DEDENT
 
 	// Literals
-	IDENT  // variable names, procedure names
-	INT    // integer literal
-	STRING // string literal
+	IDENT     // variable names, procedure names
+	INT       // integer literal
+	STRING    // string literal
+	BYTE_LIT  // byte literal: 'A', '*n', etc.
 
 	// Operators
 	ASSIGN   // :=
@@ -94,9 +95,10 @@ var tokenNames = map[TokenType]string{
 	INDENT:  "INDENT",
 	DEDENT:  "DEDENT",
 
-	IDENT:  "IDENT",
-	INT:    "INT",
-	STRING: "STRING",
+	IDENT:    "IDENT",
+	INT:      "INT",
+	STRING:   "STRING",
+	BYTE_LIT: "BYTE_LIT",
 
 	ASSIGN:   ":=",
 	PLUS:     "+",
