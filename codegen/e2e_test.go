@@ -1514,3 +1514,29 @@ func TestE2EChanShorthand(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ByteLiteral(t *testing.T) {
+	occam := `SEQ
+  BYTE x:
+  x := 'A'
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "65\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ByteLiteralEscape(t *testing.T) {
+	occam := `SEQ
+  BYTE x:
+  x := '*n'
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

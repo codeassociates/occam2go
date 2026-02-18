@@ -1105,6 +1105,49 @@ func TestStringLiteral(t *testing.T) {
 	}
 }
 
+func TestByteLiteral(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected byte
+	}{
+		{"x := 'A'\n", 'A'},
+		{"x := '0'\n", '0'},
+		{"x := ' '\n", ' '},
+		{"x := '*n'\n", '\n'},
+		{"x := '*c'\n", '\r'},
+		{"x := '*t'\n", '\t'},
+		{"x := '*s'\n", ' '},
+		{"x := '**'\n", '*'},
+		{"x := '*''\n", '\''},
+		{"x := '*\"'\n", '"'},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("input %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("input %q: expected Assignment, got %T", tt.input, program.Statements[0])
+		}
+
+		byteLit, ok := assign.Value.(*ast.ByteLiteral)
+		if !ok {
+			t.Fatalf("input %q: expected ByteLiteral, got %T", tt.input, assign.Value)
+		}
+
+		if byteLit.Value != tt.expected {
+			t.Errorf("input %q: expected Value=%d (%c), got %d (%c)", tt.input, tt.expected, tt.expected, byteLit.Value, byteLit.Value)
+		}
+	}
+}
+
 func TestStringLiteralInProcCall(t *testing.T) {
 	input := `print.string("hello")
 `

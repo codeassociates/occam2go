@@ -232,6 +232,24 @@ func TestStringLiteral(t *testing.T) {
 	}
 }
 
+func TestByteLiteral(t *testing.T) {
+	input := "x := 'A'\n"
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "x = byte(65)") {
+		t.Errorf("expected 'x = byte(65)' in output, got:\n%s", output)
+	}
+}
+
+func TestByteLiteralEscape(t *testing.T) {
+	input := "x := '*n'\n"
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "x = byte(10)") {
+		t.Errorf("expected 'x = byte(10)' in output, got:\n%s", output)
+	}
+}
+
 func TestStop(t *testing.T) {
 	input := "STOP\n"
 	output := transpile(t, input)

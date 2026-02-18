@@ -178,6 +178,11 @@ func (l *Lexer) NextToken() Token {
 	case '"':
 		tok.Type = STRING
 		tok.Literal = l.readString()
+	case '\'':
+		tok.Type = BYTE_LIT
+		tok.Literal = l.readByteLiteral()
+		tok.Line = l.line
+		tok.Column = l.column
 	case '\n':
 		tok = Token{Type: NEWLINE, Literal: "\\n", Line: l.line, Column: l.column}
 		l.line++
@@ -248,6 +253,33 @@ func (l *Lexer) readString() string {
 	for {
 		l.readChar()
 		if l.ch == '"' || l.ch == 0 {
+			break
+		}
+	}
+	return l.input[position:l.position]
+}
+
+func (l *Lexer) readByteLiteral() string {
+	// Current char is the opening single quote.
+	// Read content between single quotes, handling *' escape.
+	// In occam, * is the escape character. ** means literal *, *' means literal '.
+	position := l.position + 1
+	escaped := false
+	for {
+		l.readChar()
+		if l.ch == 0 {
+			break
+		}
+		if escaped {
+			// This char is the escaped character; consume it and clear flag
+			escaped = false
+			continue
+		}
+		if l.ch == '*' {
+			escaped = true
+			continue
+		}
+		if l.ch == '\'' {
 			break
 		}
 	}
