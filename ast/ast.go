@@ -178,8 +178,9 @@ func (w *WhileLoop) TokenLiteral() string { return w.Token.Literal }
 
 // IfStatement represents an IF statement
 type IfStatement struct {
-	Token   lexer.Token // the IF token
-	Choices []IfChoice
+	Token      lexer.Token // the IF token
+	Choices    []IfChoice
+	Replicator *Replicator // optional replicator for IF i = start FOR count
 }
 
 type IfChoice struct {

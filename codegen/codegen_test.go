@@ -163,6 +163,24 @@ func TestIfStatement(t *testing.T) {
 	}
 }
 
+func TestReplicatedIf(t *testing.T) {
+	input := `IF i = 0 FOR 5
+  i = 3
+    SKIP
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "for i := 0; i < 0 + 5; i++") {
+		t.Errorf("expected for loop in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "if (i == 3)") {
+		t.Errorf("expected 'if (i == 3)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "break") {
+		t.Errorf("expected 'break' in output, got:\n%s", output)
+	}
+}
+
 func TestArrayDecl(t *testing.T) {
 	input := `[5]INT arr:
 `

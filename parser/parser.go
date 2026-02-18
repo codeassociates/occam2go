@@ -1944,6 +1944,17 @@ func (p *Parser) parseWhileLoop() *ast.WhileLoop {
 func (p *Parser) parseIfStatement() *ast.IfStatement {
 	stmt := &ast.IfStatement{Token: p.curToken}
 
+	// Check for replicator: IF i = start FOR count
+	if p.peekTokenIs(lexer.IDENT) {
+		p.nextToken() // move to identifier
+		if p.peekTokenIs(lexer.EQ) {
+			stmt.Replicator = p.parseReplicator()
+		} else {
+			p.addError("unexpected identifier after IF")
+			return stmt
+		}
+	}
+
 	// Skip to next line
 	for p.peekTokenIs(lexer.NEWLINE) {
 		p.nextToken()

@@ -1174,24 +1174,60 @@ func (g *Generator) generateWhileLoop(loop *ast.WhileLoop) {
 }
 
 func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
-	for i, choice := range stmt.Choices {
+	if stmt.Replicator != nil {
+		// Replicated IF: IF i = start FOR count → for loop with break on first match
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		if i == 0 {
-			g.write("if ")
-		} else {
-			g.write("} else if ")
-		}
-		g.generateExpression(choice.Condition)
-		g.write(" {\n")
+		g.write(fmt.Sprintf("for %s := ", stmt.Replicator.Variable))
+		g.generateExpression(stmt.Replicator.Start)
+		g.write(fmt.Sprintf("; %s < ", stmt.Replicator.Variable))
+		g.generateExpression(stmt.Replicator.Start)
+		g.write(" + ")
+		g.generateExpression(stmt.Replicator.Count)
+		g.write(fmt.Sprintf("; %s++ {\n", stmt.Replicator.Variable))
 		g.indent++
 
-		if choice.Body != nil {
-			g.generateStatement(choice.Body)
+		for i, choice := range stmt.Choices {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			if i == 0 {
+				g.write("if ")
+			} else {
+				g.write("} else if ")
+			}
+			g.generateExpression(choice.Condition)
+			g.write(" {\n")
+			g.indent++
+
+			if choice.Body != nil {
+				g.generateStatement(choice.Body)
+			}
+			g.writeLine("break")
+
+			g.indent--
 		}
+		g.writeLine("}")
 
 		g.indent--
+		g.writeLine("}")
+	} else {
+		for i, choice := range stmt.Choices {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			if i == 0 {
+				g.write("if ")
+			} else {
+				g.write("} else if ")
+			}
+			g.generateExpression(choice.Condition)
+			g.write(" {\n")
+			g.indent++
+
+			if choice.Body != nil {
+				g.generateStatement(choice.Body)
+			}
+
+			g.indent--
+		}
+		g.writeLine("}")
 	}
-	g.writeLine("}")
 }
 
 func (g *Generator) generateCaseStatement(stmt *ast.CaseStatement) {
