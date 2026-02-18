@@ -842,6 +842,23 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 func (g *Generator) generateAssignment(assign *ast.Assignment) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 
+	if assign.SliceTarget != nil {
+		// Slice assignment: [arr FROM start FOR length] := value
+		// Maps to: copy(arr[start : start + length], value)
+		g.write("copy(")
+		g.generateExpression(assign.SliceTarget.Array)
+		g.write("[")
+		g.generateExpression(assign.SliceTarget.Start)
+		g.write(" : ")
+		g.generateExpression(assign.SliceTarget.Start)
+		g.write(" + ")
+		g.generateExpression(assign.SliceTarget.Length)
+		g.write("], ")
+		g.generateExpression(assign.Value)
+		g.write(")\n")
+		return
+	}
+
 	if assign.Index != nil {
 		// Check if this is a record field access
 		if _, ok := g.recordVars[assign.Name]; ok {
@@ -1335,6 +1352,15 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.generateExpression(e.Left)
 		g.write("[")
 		g.generateExpression(e.Index)
+		g.write("]")
+	case *ast.SliceExpr:
+		g.generateExpression(e.Array)
+		g.write("[")
+		g.generateExpression(e.Start)
+		g.write(" : ")
+		g.generateExpression(e.Start)
+		g.write(" + ")
+		g.generateExpression(e.Length)
 		g.write("]")
 	case *ast.FuncCall:
 		g.generateFuncCallExpr(e)

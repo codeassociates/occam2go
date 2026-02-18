@@ -167,6 +167,78 @@ func TestE2E_SizeString(t *testing.T) {
 	}
 }
 
+func TestE2E_SliceAsArg(t *testing.T) {
+	// Pass an array slice to a PROC expecting an open array param
+	occam := `PROC printarray(VAL []INT arr)
+  SEQ i = 0 FOR SIZE arr
+    print.int(arr[i])
+SEQ
+  [5]INT nums:
+  SEQ i = 0 FOR 5
+    nums[i] := (i + 1) * 10
+  printarray([nums FROM 1 FOR 3])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n30\n40\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_SliceAssignment(t *testing.T) {
+	// Copy elements within an array using slice assignment
+	occam := `SEQ
+  [6]INT arr:
+  SEQ i = 0 FOR 6
+    arr[i] := i + 1
+  [arr FROM 3 FOR 3] := [arr FROM 0 FOR 3]
+  SEQ i = 0 FOR 6
+    print.int(arr[i])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n2\n3\n1\n2\n3\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_SliceSize(t *testing.T) {
+	// SIZE of a slice expression
+	occam := `SEQ
+  [10]INT arr:
+  INT n:
+  n := SIZE [arr FROM 2 FOR 5]
+  print.int(n)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "5\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_SliceFromZero(t *testing.T) {
+	// Slice starting from index 0 passed to a VAL open array proc
+	occam := `PROC printsum(VAL []INT arr)
+  SEQ
+    INT total:
+    total := 0
+    SEQ i = 0 FOR SIZE arr
+      total := total + arr[i]
+    print.int(total)
+SEQ
+  [5]INT arr:
+  SEQ i = 0 FOR 5
+    arr[i] := i + 1
+  printsum([arr FROM 0 FOR 3])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "6\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_OpenArrayParam(t *testing.T) {
 	occam := `PROC printarray(VAL []INT arr)
   SEQ i = 0 FOR SIZE arr
