@@ -115,6 +115,8 @@ Six packages, one pipeline:
 | `#COMMENT`/`#PRAGMA`/`#USE` | Ignored (blank line) |
 | `#FF`, `#80000000` | `0xFF`, `0x80000000` (hex integer literals) |
 | `SIZE arr` / `SIZE "str"` | `len(arr)` / `len("str")` |
+| `[arr FROM n FOR m]` | `arr[n : n+m]` (array slice) |
+| `[arr FROM n FOR m] := src` | `copy(arr[n:n+m], src)` (slice assignment) |
 
 ## Key Parser Patterns
 
@@ -143,10 +145,11 @@ Typical workflow for a new language construct:
 3. **Parser** (`parser/parser.go`): Add case to `parseStatement()` switch; implement parse function
 4. **Codegen** (`codegen/codegen.go`): Add case to `generateStatement()` or `generateExpression()`; implement generation. If the new construct needs an import (sync, fmt, time), add a `containsX()` scanner
 5. **Tests**: Add parser unit tests in `parser/parser_test.go`, codegen unit tests in `codegen/codegen_test.go`, and e2e tests in `codegen/e2e_test.go`
+6. **Documentation**: Update TODO.md to reflect support for the new feature.
 
 ## What's Implemented
 
-Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator.
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator, array slices (`[arr FROM n FOR m]` with slice assignment).
 
 ## Not Yet Implemented
 
