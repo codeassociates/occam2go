@@ -2347,6 +2347,22 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Token: token,
 			Expr:  p.parseExpression(PREFIX),
 		}
+	case lexer.MOSTNEG_KW, lexer.MOSTPOS_KW:
+		token := p.curToken
+		isNeg := token.Type == lexer.MOSTNEG_KW
+		// Expect a type name next
+		if !p.peekTokenIs(lexer.INT_TYPE) && !p.peekTokenIs(lexer.BYTE_TYPE) &&
+			!p.peekTokenIs(lexer.BOOL_TYPE) && !p.peekTokenIs(lexer.REAL_TYPE) &&
+			!p.peekTokenIs(lexer.REAL32_TYPE) && !p.peekTokenIs(lexer.REAL64_TYPE) {
+			p.addError(fmt.Sprintf("expected type after %s, got %s", token.Literal, p.peekToken.Type))
+			return nil
+		}
+		p.nextToken()
+		left = &ast.MostExpr{
+			Token:    token,
+			ExprType: p.curToken.Literal,
+			IsNeg:    isNeg,
+		}
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		token := p.curToken
 		p.nextToken()

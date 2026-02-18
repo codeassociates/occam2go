@@ -15,6 +15,7 @@ type Generator struct {
 	needFmt  bool // track if we need fmt package import
 	needTime bool // track if we need time package import
 	needOs   bool // track if we need os package import
+	needMath bool // track if we need math package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -54,6 +55,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needFmt = false
 	g.needTime = false
 	g.needOs = false
+	g.needMath = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -77,6 +79,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 			g.needOs = true
 			g.needFmt = true
 		}
+		if g.containsMostExpr(stmt) {
+			g.needMath = true
+		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
 			g.collectNestedProcSigs(proc.Body)
@@ -99,11 +104,14 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt || g.needTime || g.needOs {
+	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath {
 		g.writeLine("import (")
 		g.indent++
 		if g.needFmt {
 			g.writeLine(`"fmt"`)
+		}
+		if g.needMath {
+			g.writeLine(`"math"`)
 		}
 		if g.needOs {
 			g.writeLine(`"os"`)
@@ -410,6 +418,164 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 		}
 	}
 	return false
+}
+
+func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.Assignment:
+		return g.exprNeedsMath(s.Value) || g.exprNeedsMath(s.Index)
+	case *ast.MultiAssignment:
+		for _, v := range s.Values {
+			if g.exprNeedsMath(v) {
+				return true
+			}
+		}
+	case *ast.Abbreviation:
+		return g.exprNeedsMath(s.Value)
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsMostExpr(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsMostExpr(inner) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		for _, inner := range s.Body {
+			if g.containsMostExpr(inner) {
+				return true
+			}
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsMostExpr(inner) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		if g.exprNeedsMath(s.Condition) {
+			return true
+		}
+		if s.Body != nil && g.containsMostExpr(s.Body) {
+			return true
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if g.exprNeedsMath(choice.Condition) {
+				return true
+			}
+			if choice.Body != nil && g.containsMostExpr(choice.Body) {
+				return true
+			}
+		}
+	case *ast.CaseStatement:
+		if g.exprNeedsMath(s.Selector) {
+			return true
+		}
+		for _, choice := range s.Choices {
+			for _, v := range choice.Values {
+				if g.exprNeedsMath(v) {
+					return true
+				}
+			}
+			if choice.Body != nil && g.containsMostExpr(choice.Body) {
+				return true
+			}
+		}
+	case *ast.Send:
+		if g.exprNeedsMath(s.Value) {
+			return true
+		}
+		for _, v := range s.Values {
+			if g.exprNeedsMath(v) {
+				return true
+			}
+		}
+	case *ast.ProcCall:
+		for _, arg := range s.Args {
+			if g.exprNeedsMath(arg) {
+				return true
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsMostExpr(c.Body) {
+				return true
+			}
+		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.containsMostExpr(c.Body) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (g *Generator) exprNeedsMath(expr ast.Expression) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *ast.MostExpr:
+		// BYTE uses literal 0/255, doesn't need math
+		return e.ExprType != "BYTE"
+	case *ast.BinaryExpr:
+		return g.exprNeedsMath(e.Left) || g.exprNeedsMath(e.Right)
+	case *ast.UnaryExpr:
+		return g.exprNeedsMath(e.Right)
+	case *ast.ParenExpr:
+		return g.exprNeedsMath(e.Expr)
+	case *ast.TypeConversion:
+		return g.exprNeedsMath(e.Expr)
+	case *ast.SizeExpr:
+		return g.exprNeedsMath(e.Expr)
+	case *ast.IndexExpr:
+		return g.exprNeedsMath(e.Left) || g.exprNeedsMath(e.Index)
+	case *ast.FuncCall:
+		for _, arg := range e.Args {
+			if g.exprNeedsMath(arg) {
+				return true
+			}
+		}
+	case *ast.SliceExpr:
+		return g.exprNeedsMath(e.Array) || g.exprNeedsMath(e.Start) || g.exprNeedsMath(e.Length)
+	}
+	return false
+}
+
+func (g *Generator) generateMostExpr(e *ast.MostExpr) {
+	switch e.ExprType {
+	case "INT":
+		if e.IsNeg {
+			g.write("math.MinInt")
+		} else {
+			g.write("math.MaxInt")
+		}
+	case "BYTE":
+		if e.IsNeg {
+			g.write("0")
+		} else {
+			g.write("255")
+		}
+	case "REAL32":
+		if e.IsNeg {
+			g.write("-math.MaxFloat32")
+		} else {
+			g.write("math.MaxFloat32")
+		}
+	case "REAL64":
+		if e.IsNeg {
+			g.write("-math.MaxFloat64")
+		} else {
+			g.write("math.MaxFloat64")
+		}
+	}
 }
 
 func (g *Generator) writeLine(s string) {
@@ -1470,6 +1636,8 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write("(")
 		g.generateExpression(e.Expr)
 		g.write(")")
+	case *ast.MostExpr:
+		g.generateMostExpr(e)
 	}
 }
 

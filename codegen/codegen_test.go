@@ -304,6 +304,43 @@ func TestTypeConversion(t *testing.T) {
 	}
 }
 
+func TestMostNegMostPos(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x := MOSTNEG INT\n", "x = math.MinInt"},
+		{"x := MOSTPOS INT\n", "x = math.MaxInt"},
+		{"x := MOSTNEG BYTE\n", "x = 0"},
+		{"x := MOSTPOS BYTE\n", "x = 255"},
+		{"x := MOSTNEG REAL32\n", "x = -math.MaxFloat32"},
+		{"x := MOSTPOS REAL32\n", "x = math.MaxFloat32"},
+		{"x := MOSTNEG REAL64\n", "x = -math.MaxFloat64"},
+		{"x := MOSTPOS REAL64\n", "x = math.MaxFloat64"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
+
+func TestMostNegImportsMath(t *testing.T) {
+	output := transpile(t, "x := MOSTNEG INT\n")
+	if !strings.Contains(output, `"math"`) {
+		t.Errorf("expected math import in output, got:\n%s", output)
+	}
+}
+
+func TestMostNegByteNoMathImport(t *testing.T) {
+	output := transpile(t, "x := MOSTNEG BYTE\n")
+	if strings.Contains(output, `"math"`) {
+		t.Errorf("expected no math import for MOSTNEG BYTE, got:\n%s", output)
+	}
+}
+
 func TestStringLiteralInProcCall(t *testing.T) {
 	input := `print.string("hello")
 `
