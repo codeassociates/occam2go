@@ -1231,6 +1231,10 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.generateBinaryExpr(e)
 	case *ast.UnaryExpr:
 		g.generateUnaryExpr(e)
+	case *ast.SizeExpr:
+		g.write("len(")
+		g.generateExpression(e.Expr)
+		g.write(")")
 	case *ast.ParenExpr:
 		g.write("(")
 		g.generateExpression(e.Expr)

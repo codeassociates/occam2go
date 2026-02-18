@@ -274,6 +274,15 @@ type TypeConversion struct {
 func (tc *TypeConversion) expressionNode()      {}
 func (tc *TypeConversion) TokenLiteral() string { return tc.Token.Literal }
 
+// SizeExpr represents a SIZE expression: SIZE arr
+type SizeExpr struct {
+	Token lexer.Token // the SIZE token
+	Expr  Expression  // the array/string expression
+}
+
+func (se *SizeExpr) expressionNode()      {}
+func (se *SizeExpr) TokenLiteral() string { return se.Token.Literal }
+
 // ParenExpr represents a parenthesized expression
 type ParenExpr struct {
 	Token lexer.Token

@@ -1412,3 +1412,30 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_SizeArray(t *testing.T) {
+	occam := `SEQ
+  [5]INT arr:
+  INT n:
+  n := SIZE arr
+  print.int(n)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "5\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_SizeString(t *testing.T) {
+	occam := `SEQ
+  INT n:
+  n := SIZE "hello"
+  print.int(n)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "5\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

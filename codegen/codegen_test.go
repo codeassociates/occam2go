@@ -446,3 +446,20 @@ SEQ
 		t.Errorf("expected 'v = p.x' in output, got:\n%s", output)
 	}
 }
+
+func TestSizeOperator(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x := SIZE arr\n", "x = len(arr)"},
+		{"x := SIZE arr + 1\n", "x = (len(arr) + 1)"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
