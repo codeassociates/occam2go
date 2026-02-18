@@ -1995,6 +1995,13 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Operator: "~",
 			Right:    p.parseExpression(PREFIX),
 		}
+	case lexer.SIZE_KW:
+		token := p.curToken
+		p.nextToken()
+		left = &ast.SizeExpr{
+			Token: token,
+			Expr:  p.parseExpression(PREFIX),
+		}
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		token := p.curToken
 		p.nextToken()

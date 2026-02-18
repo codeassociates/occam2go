@@ -1768,3 +1768,59 @@ func TestSequentialReceive(t *testing.T) {
 		t.Errorf("expected additional variables [y], got %v", recv.Variables)
 	}
 }
+
+func TestSizeExpression(t *testing.T) {
+	input := `x := SIZE arr
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	sizeExpr, ok := assign.Value.(*ast.SizeExpr)
+	if !ok {
+		t.Fatalf("expected SizeExpr, got %T", assign.Value)
+	}
+
+	ident, ok := sizeExpr.Expr.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier inside SizeExpr, got %T", sizeExpr.Expr)
+	}
+	if ident.Value != "arr" {
+		t.Errorf("expected 'arr', got %s", ident.Value)
+	}
+}
+
+func TestSizeExpressionInBinaryExpr(t *testing.T) {
+	// SIZE has PREFIX precedence, so "SIZE arr + 1" parses as "(SIZE arr) + 1"
+	input := `x := SIZE arr + 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	_, ok = binExpr.Left.(*ast.SizeExpr)
+	if !ok {
+		t.Fatalf("expected SizeExpr as left of BinaryExpr, got %T", binExpr.Left)
+	}
+}
