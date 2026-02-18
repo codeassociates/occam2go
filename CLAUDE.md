@@ -116,6 +116,10 @@ Six packages, one pipeline:
 | `#COMMENT`/`#PRAGMA`/`#USE` | Ignored (blank line) |
 | `#FF`, `#80000000` | `0xFF`, `0x80000000` (hex integer literals) |
 | `SIZE arr` / `SIZE "str"` | `len(arr)` / `len("str")` |
+| `MOSTNEG INT` / `MOSTPOS INT` | `math.MinInt` / `math.MaxInt` |
+| `MOSTNEG BYTE` / `MOSTPOS BYTE` | `0` / `255` |
+| `MOSTNEG REAL32` / `MOSTPOS REAL32` | `-math.MaxFloat32` / `math.MaxFloat32` |
+| `MOSTNEG REAL64` / `MOSTPOS REAL64` | `-math.MaxFloat64` / `math.MaxFloat64` |
 | `[arr FROM n FOR m]` | `arr[n : n+m]` (array slice) |
 | `[arr FROM n FOR m] := src` | `copy(arr[n:n+m], src)` (slice assignment) |
 | Nested `PROC`/`FUNCTION` | `name := func(...) { ... }` (Go closure) |
@@ -151,7 +155,7 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ/PAR/IF (with optional STEP), arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator, array slices (`[arr FROM n FOR m]` with slice assignment), nested PROCs/FUNCTIONs (local definitions as Go closures).
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ/PAR/IF (with optional STEP), arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator, array slices (`[arr FROM n FOR m]` with slice assignment), nested PROCs/FUNCTIONs (local definitions as Go closures), MOSTNEG/MOSTPOS (type min/max constants for INT, BYTE, REAL32, REAL64).
 
 ## Not Yet Implemented
 

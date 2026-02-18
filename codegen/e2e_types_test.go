@@ -253,3 +253,85 @@ func TestE2E_ByteLiteralEscape(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_MostNegInt(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := MOSTNEG INT
+  BOOL neg:
+  IF
+    x < 0
+      neg := TRUE
+    TRUE
+      neg := FALSE
+  print.bool(neg)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "true\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostPosInt(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := MOSTPOS INT
+  BOOL pos:
+  IF
+    x > 0
+      pos := TRUE
+    TRUE
+      pos := FALSE
+  print.bool(pos)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "true\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostNegByte(t *testing.T) {
+	occam := `SEQ
+  BYTE x:
+  x := MOSTNEG BYTE
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostPosByte(t *testing.T) {
+	occam := `SEQ
+  BYTE x:
+  x := MOSTPOS BYTE
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "255\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostNegInExpression(t *testing.T) {
+	// Test MOSTNEG INT used in comparison (like utils.occ does)
+	occam := `SEQ
+  INT n:
+  n := MOSTNEG INT
+  IF
+    n = (MOSTNEG INT)
+      print.int(1)
+    TRUE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

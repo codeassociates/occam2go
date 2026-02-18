@@ -78,7 +78,7 @@ These features are needed to transpile the KRoC course module (`kroc/modules/cou
 | ~~**Replicated IF**~~ | ~~`IF i = 0 FOR n` — replicated conditional.~~ **DONE** | utils.occ, file_in.occ, string.occ, float_io.occ |
 | ~~**Hex integer literals**~~ | ~~`#FF`, `#80000000` — prefixed with `#`.~~ **DONE** | float_io.occ, stringbuf.occ |
 | **Checked arithmetic** | `TIMES`, `PLUS`, `MINUS` — modular (wrapping) arithmetic operators. | demo_cycles.occ, random.occ, utils.occ |
-| **`MOSTNEG INT`** | Most-negative integer constant. | utils.occ |
+| ~~**`MOSTNEG INT`**~~ | ~~Most-negative integer constant (`MOSTNEG`/`MOSTPOS` for INT, BYTE, REAL32, REAL64).~~ **DONE** | utils.occ |
 | **`INITIAL` declarations** | `INITIAL INT i IS 0:` — mutable variable with initial value. | stringbuf.occ |
 | ~~**Array slices**~~ | ~~`[a FROM n FOR m]` — sub-array references.~~ **DONE** | string.occ, stringbuf.occ, float_io.occ |
 | ~~**Replicator STEP**~~ | ~~`SEQ i = n FOR m STEP -1` — step value in replicators.~~ **DONE** | stringbuf.occ |

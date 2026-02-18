@@ -2041,6 +2041,87 @@ func TestSizeExpressionInBinaryExpr(t *testing.T) {
 	}
 }
 
+func TestMostNegExpression(t *testing.T) {
+	input := `x := MOSTNEG INT
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	mostExpr, ok := assign.Value.(*ast.MostExpr)
+	if !ok {
+		t.Fatalf("expected MostExpr, got %T", assign.Value)
+	}
+
+	if mostExpr.ExprType != "INT" {
+		t.Errorf("expected ExprType 'INT', got %s", mostExpr.ExprType)
+	}
+	if !mostExpr.IsNeg {
+		t.Error("expected IsNeg to be true for MOSTNEG")
+	}
+}
+
+func TestMostPosExpression(t *testing.T) {
+	input := `x := MOSTPOS BYTE
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	mostExpr, ok := assign.Value.(*ast.MostExpr)
+	if !ok {
+		t.Fatalf("expected MostExpr, got %T", assign.Value)
+	}
+
+	if mostExpr.ExprType != "BYTE" {
+		t.Errorf("expected ExprType 'BYTE', got %s", mostExpr.ExprType)
+	}
+	if mostExpr.IsNeg {
+		t.Error("expected IsNeg to be false for MOSTPOS")
+	}
+}
+
+func TestMostNegInBinaryExpr(t *testing.T) {
+	// MOSTNEG INT + 1 should parse as (MOSTNEG INT) + 1
+	input := `x := MOSTNEG INT + 1
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	binExpr, ok := assign.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", assign.Value)
+	}
+
+	_, ok = binExpr.Left.(*ast.MostExpr)
+	if !ok {
+		t.Fatalf("expected MostExpr as left of BinaryExpr, got %T", binExpr.Left)
+	}
+}
+
 func TestValAbbreviation(t *testing.T) {
 	input := `VAL INT x IS 42:
 `

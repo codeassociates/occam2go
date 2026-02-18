@@ -306,6 +306,16 @@ type SizeExpr struct {
 func (se *SizeExpr) expressionNode()      {}
 func (se *SizeExpr) TokenLiteral() string { return se.Token.Literal }
 
+// MostExpr represents MOSTNEG/MOSTPOS type expressions: MOSTNEG INT, MOSTPOS BYTE, etc.
+type MostExpr struct {
+	Token    lexer.Token // the MOSTNEG or MOSTPOS token
+	ExprType string      // "INT", "BYTE", "REAL32", "REAL64", etc.
+	IsNeg    bool        // true for MOSTNEG, false for MOSTPOS
+}
+
+func (me *MostExpr) expressionNode()      {}
+func (me *MostExpr) TokenLiteral() string { return me.Token.Literal }
+
 // ParenExpr represents a parenthesized expression
 type ParenExpr struct {
 	Token lexer.Token
