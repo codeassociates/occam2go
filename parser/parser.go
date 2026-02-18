@@ -382,9 +382,9 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 			Size:    size,
 		}
 
-		// Expect OF
-		if !p.expectPeek(lexer.OF) {
-			return nil
+		// Expect OF (optional — CHAN BYTE is shorthand for CHAN OF BYTE)
+		if p.peekTokenIs(lexer.OF) {
+			p.nextToken() // consume OF
 		}
 
 		// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
@@ -396,7 +396,7 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 		} else if p.curTokenIs(lexer.IDENT) {
 			chanDecl.ElemType = p.curToken.Literal
 		} else {
-			p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+			p.addError(fmt.Sprintf("expected type after CHAN, got %s", p.curToken.Type))
 			return nil
 		}
 
@@ -579,9 +579,9 @@ func (p *Parser) parseIndexExpression(left ast.Expression) *ast.IndexExpr {
 func (p *Parser) parseChanDecl() *ast.ChanDecl {
 	decl := &ast.ChanDecl{Token: p.curToken}
 
-	// Expect OF
-	if !p.expectPeek(lexer.OF) {
-		return nil
+	// Expect OF (optional — CHAN BYTE is shorthand for CHAN OF BYTE)
+	if p.peekTokenIs(lexer.OF) {
+		p.nextToken() // consume OF
 	}
 
 	// Expect type (INT, BYTE, BOOL, etc.) or protocol name (IDENT)
@@ -593,7 +593,7 @@ func (p *Parser) parseChanDecl() *ast.ChanDecl {
 	} else if p.curTokenIs(lexer.IDENT) {
 		decl.ElemType = p.curToken.Literal
 	} else {
-		p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+		p.addError(fmt.Sprintf("expected type after CHAN, got %s", p.curToken.Type))
 		return nil
 	}
 
@@ -1609,11 +1609,11 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken() // consume ]
 			p.nextToken() // move past ]
 			if p.curTokenIs(lexer.CHAN) {
-				// []CHAN OF <type> (channel array parameter)
+				// []CHAN OF <type> or []CHAN <type> (channel array parameter)
 				param.IsChan = true
 				param.IsChanArray = true
-				if !p.expectPeek(lexer.OF) {
-					return params
+				if p.peekTokenIs(lexer.OF) {
+					p.nextToken() // consume OF
 				}
 				p.nextToken() // move to element type
 				if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
@@ -1623,7 +1623,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				} else if p.curTokenIs(lexer.IDENT) {
 					param.ChanElemType = p.curToken.Literal
 				} else {
-					p.addError(fmt.Sprintf("expected type after []CHAN OF, got %s", p.curToken.Type))
+					p.addError(fmt.Sprintf("expected type after []CHAN, got %s", p.curToken.Type))
 					return params
 				}
 				p.nextToken()
@@ -1644,10 +1644,10 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				return params
 			}
 		} else if p.curTokenIs(lexer.CHAN) {
-			// Check for CHAN OF <type>
+			// Check for CHAN OF <type> or CHAN <type>
 			param.IsChan = true
-			if !p.expectPeek(lexer.OF) {
-				return params
+			if p.peekTokenIs(lexer.OF) {
+				p.nextToken() // consume OF
 			}
 			p.nextToken() // move to element type
 			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
@@ -1657,7 +1657,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			} else if p.curTokenIs(lexer.IDENT) {
 				param.ChanElemType = p.curToken.Literal
 			} else {
-				p.addError(fmt.Sprintf("expected type after CHAN OF, got %s", p.curToken.Type))
+				p.addError(fmt.Sprintf("expected type after CHAN, got %s", p.curToken.Type))
 				return params
 			}
 			p.nextToken()
