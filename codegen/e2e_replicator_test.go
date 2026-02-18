@@ -103,3 +103,50 @@ func TestE2E_ReplicatedIf(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ReplicatedSeqStep(t *testing.T) {
+	// Test replicated SEQ with STEP: SEQ i = 0 FOR 5 STEP 2 prints 0, 2, 4, 6, 8
+	occam := `SEQ i = 0 FOR 5 STEP 2
+  print.int(i)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n2\n4\n6\n8\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedSeqNegativeStep(t *testing.T) {
+	// Test replicated SEQ with negative STEP: counts down
+	occam := `SEQ i = 9 FOR 5 STEP -1
+  print.int(i)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "9\n8\n7\n6\n5\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedParStep(t *testing.T) {
+	// Test replicated PAR with STEP: verify all goroutines run with correct values
+	occam := `SEQ
+  CHAN OF INT c:
+  INT sum:
+  sum := 0
+  PAR
+    PAR i = 0 FOR 3 STEP 10
+      c ! i
+    SEQ j = 0 FOR 3
+      INT x:
+      c ? x
+      sum := sum + x
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	// sum should be 0+10+20 = 30
+	expected := "30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

@@ -923,16 +923,33 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 
 func (g *Generator) generateSeqBlock(seq *ast.SeqBlock) {
 	if seq.Replicator != nil {
-		// Replicated SEQ: SEQ i = start FOR count becomes a for loop
-		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write(fmt.Sprintf("for %s := ", seq.Replicator.Variable))
-		g.generateExpression(seq.Replicator.Start)
-		g.write(fmt.Sprintf("; %s < ", seq.Replicator.Variable))
-		g.generateExpression(seq.Replicator.Start)
-		g.write(" + ")
-		g.generateExpression(seq.Replicator.Count)
-		g.write(fmt.Sprintf("; %s++ {\n", seq.Replicator.Variable))
-		g.indent++
+		if seq.Replicator.Step != nil {
+			// Replicated SEQ with STEP: counter-based loop
+			v := seq.Replicator.Variable
+			counter := "_repl_" + v
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
+			g.generateExpression(seq.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", counter))
+			g.indent++
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("%s := ", v))
+			g.generateExpression(seq.Replicator.Start)
+			g.write(fmt.Sprintf(" + %s * ", counter))
+			g.generateExpression(seq.Replicator.Step)
+			g.write("\n")
+		} else {
+			// Replicated SEQ: SEQ i = start FOR count becomes a for loop
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := ", seq.Replicator.Variable))
+			g.generateExpression(seq.Replicator.Start)
+			g.write(fmt.Sprintf("; %s < ", seq.Replicator.Variable))
+			g.generateExpression(seq.Replicator.Start)
+			g.write(" + ")
+			g.generateExpression(seq.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", seq.Replicator.Variable))
+			g.indent++
+		}
 		for _, stmt := range seq.Statements {
 			g.generateStatement(stmt)
 		}
@@ -955,18 +972,34 @@ func (g *Generator) generateParBlock(par *ast.ParBlock) {
 		g.generateExpression(par.Replicator.Count)
 		g.write("))\n")
 
-		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write(fmt.Sprintf("for %s := ", par.Replicator.Variable))
-		g.generateExpression(par.Replicator.Start)
-		g.write(fmt.Sprintf("; %s < ", par.Replicator.Variable))
-		g.generateExpression(par.Replicator.Start)
-		g.write(" + ")
-		g.generateExpression(par.Replicator.Count)
-		g.write(fmt.Sprintf("; %s++ {\n", par.Replicator.Variable))
-		g.indent++
-
-		// Capture loop variable to avoid closure issues
-		g.writeLine(fmt.Sprintf("%s := %s", par.Replicator.Variable, par.Replicator.Variable))
+		v := par.Replicator.Variable
+		if par.Replicator.Step != nil {
+			counter := "_repl_" + v
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
+			g.generateExpression(par.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", counter))
+			g.indent++
+			// Compute loop variable from counter — also serves as closure capture
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("%s := ", v))
+			g.generateExpression(par.Replicator.Start)
+			g.write(fmt.Sprintf(" + %s * ", counter))
+			g.generateExpression(par.Replicator.Step)
+			g.write("\n")
+		} else {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := ", v))
+			g.generateExpression(par.Replicator.Start)
+			g.write(fmt.Sprintf("; %s < ", v))
+			g.generateExpression(par.Replicator.Start)
+			g.write(" + ")
+			g.generateExpression(par.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", v))
+			g.indent++
+			// Capture loop variable to avoid closure issues
+			g.writeLine(fmt.Sprintf("%s := %s", v, v))
+		}
 		g.writeLine("go func() {")
 		g.indent++
 		g.writeLine("defer wg.Done()")
@@ -1277,15 +1310,31 @@ func (g *Generator) generateWhileLoop(loop *ast.WhileLoop) {
 func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 	if stmt.Replicator != nil {
 		// Replicated IF: IF i = start FOR count → for loop with break on first match
-		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write(fmt.Sprintf("for %s := ", stmt.Replicator.Variable))
-		g.generateExpression(stmt.Replicator.Start)
-		g.write(fmt.Sprintf("; %s < ", stmt.Replicator.Variable))
-		g.generateExpression(stmt.Replicator.Start)
-		g.write(" + ")
-		g.generateExpression(stmt.Replicator.Count)
-		g.write(fmt.Sprintf("; %s++ {\n", stmt.Replicator.Variable))
-		g.indent++
+		v := stmt.Replicator.Variable
+		if stmt.Replicator.Step != nil {
+			counter := "_repl_" + v
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
+			g.generateExpression(stmt.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", counter))
+			g.indent++
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("%s := ", v))
+			g.generateExpression(stmt.Replicator.Start)
+			g.write(fmt.Sprintf(" + %s * ", counter))
+			g.generateExpression(stmt.Replicator.Step)
+			g.write("\n")
+		} else {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := ", v))
+			g.generateExpression(stmt.Replicator.Start)
+			g.write(fmt.Sprintf("; %s < ", v))
+			g.generateExpression(stmt.Replicator.Start)
+			g.write(" + ")
+			g.generateExpression(stmt.Replicator.Count)
+			g.write(fmt.Sprintf("; %s++ {\n", v))
+			g.indent++
+		}
 
 		for i, choice := range stmt.Choices {
 			g.builder.WriteString(strings.Repeat("\t", g.indent))

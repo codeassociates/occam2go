@@ -81,7 +81,7 @@ These features are needed to transpile the KRoC course module (`kroc/modules/cou
 | **`MOSTNEG INT`** | Most-negative integer constant. | utils.occ |
 | **`INITIAL` declarations** | `INITIAL INT i IS 0:` — mutable variable with initial value. | stringbuf.occ |
 | ~~**Array slices**~~ | ~~`[a FROM n FOR m]` — sub-array references.~~ **DONE** | string.occ, stringbuf.occ, float_io.occ |
-| **Replicator STEP** | `SEQ i = n FOR m STEP -1` — step value in replicators. | stringbuf.occ |
+| ~~**Replicator STEP**~~ | ~~`SEQ i = n FOR m STEP -1` — step value in replicators.~~ **DONE** | stringbuf.occ |
 | **Multi-assignment** | `a, b := x, y` — parallel assignment to multiple variables. | stringbuf.occ, utils.occ |
 
 ### Required for shared_screen module (extends course module)

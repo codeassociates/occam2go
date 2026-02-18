@@ -98,11 +98,12 @@ type ParBlock struct {
 func (p *ParBlock) statementNode()       {}
 func (p *ParBlock) TokenLiteral() string { return p.Token.Literal }
 
-// Replicator represents a replication spec: i = start FOR count
+// Replicator represents a replication spec: i = start FOR count [STEP step]
 type Replicator struct {
 	Variable string     // loop variable name
 	Start    Expression // start value
 	Count    Expression // number of iterations
+	Step     Expression // optional step value (nil means step of 1)
 }
 
 // Skip represents the SKIP statement (no-op)
