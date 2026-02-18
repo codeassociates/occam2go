@@ -257,3 +257,52 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_MultiAssignmentSwap(t *testing.T) {
+	occam := `SEQ
+  [2]INT arr:
+  SEQ
+    arr[0] := 10
+    arr[1] := 20
+    arr[0], arr[1] := arr[1], arr[0]
+    print.int(arr[0])
+    print.int(arr[1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiAssignmentMixed(t *testing.T) {
+	occam := `SEQ
+  INT a:
+  [3]INT arr:
+  SEQ
+    arr[0] := 99
+    a, arr[1] := arr[0], 42
+    print.int(a)
+    print.int(arr[1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "99\n42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiAssignmentValues(t *testing.T) {
+	occam := `SEQ
+  INT a, b, c:
+  a, b, c := 10, 20, 30
+  print.int(a)
+  print.int(b)
+  print.int(c)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n20\n30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

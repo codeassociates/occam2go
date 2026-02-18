@@ -890,8 +890,11 @@ func TestMultiAssignment(t *testing.T) {
 		t.Fatalf("expected MultiAssignment, got %T", program.Statements[0])
 	}
 
-	if len(ma.Targets) != 2 || ma.Targets[0] != "a" || ma.Targets[1] != "b" {
+	if len(ma.Targets) != 2 || ma.Targets[0].Name != "a" || ma.Targets[1].Name != "b" {
 		t.Errorf("expected targets [a, b], got %v", ma.Targets)
+	}
+	if ma.Targets[0].Index != nil || ma.Targets[1].Index != nil {
+		t.Errorf("expected no index on targets")
 	}
 
 	if len(ma.Values) != 1 {
@@ -905,6 +908,66 @@ func TestMultiAssignment(t *testing.T) {
 
 	if fc.Name != "swap" {
 		t.Errorf("expected function name 'swap', got %s", fc.Name)
+	}
+}
+
+func TestMultiAssignmentIndexed(t *testing.T) {
+	input := `x[0], x[1] := x[1], x[0]
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ma, ok := program.Statements[0].(*ast.MultiAssignment)
+	if !ok {
+		t.Fatalf("expected MultiAssignment, got %T", program.Statements[0])
+	}
+
+	if len(ma.Targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(ma.Targets))
+	}
+	if ma.Targets[0].Name != "x" || ma.Targets[1].Name != "x" {
+		t.Errorf("expected target names [x, x], got [%s, %s]", ma.Targets[0].Name, ma.Targets[1].Name)
+	}
+	if ma.Targets[0].Index == nil || ma.Targets[1].Index == nil {
+		t.Fatalf("expected indexed targets")
+	}
+
+	if len(ma.Values) != 2 {
+		t.Fatalf("expected 2 values, got %d", len(ma.Values))
+	}
+}
+
+func TestMultiAssignmentMixed(t *testing.T) {
+	input := `a, x[i] := 1, 2
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ma, ok := program.Statements[0].(*ast.MultiAssignment)
+	if !ok {
+		t.Fatalf("expected MultiAssignment, got %T", program.Statements[0])
+	}
+
+	if len(ma.Targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(ma.Targets))
+	}
+	if ma.Targets[0].Name != "a" || ma.Targets[0].Index != nil {
+		t.Errorf("expected simple target 'a', got %v", ma.Targets[0])
+	}
+	if ma.Targets[1].Name != "x" || ma.Targets[1].Index == nil {
+		t.Errorf("expected indexed target 'x[i]', got %v", ma.Targets[1])
 	}
 }
 

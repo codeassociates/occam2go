@@ -425,6 +425,11 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 	case *ast.Assignment:
 		return g.exprNeedsMath(s.Value) || g.exprNeedsMath(s.Index)
 	case *ast.MultiAssignment:
+		for _, t := range s.Targets {
+			if g.exprNeedsMath(t.Index) {
+				return true
+			}
+		}
 		for _, v := range s.Values {
 			if g.exprNeedsMath(v) {
 				return true
@@ -1430,7 +1435,37 @@ func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
 
 func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	g.write(strings.Join(stmt.Targets, ", "))
+	for i, target := range stmt.Targets {
+		if i > 0 {
+			g.write(", ")
+		}
+		if target.Index != nil {
+			// Check if this is a record field access
+			if _, ok := g.recordVars[target.Name]; ok {
+				if ident, ok := target.Index.(*ast.Identifier); ok {
+					g.write(target.Name)
+					g.write(".")
+					g.write(ident.Value)
+					continue
+				}
+			}
+			if g.refParams[target.Name] {
+				g.write("(*")
+				g.write(target.Name)
+				g.write(")")
+			} else {
+				g.write(target.Name)
+			}
+			g.write("[")
+			g.generateExpression(target.Index)
+			g.write("]")
+		} else {
+			if g.refParams[target.Name] {
+				g.write("*")
+			}
+			g.write(target.Name)
+		}
+	}
 	g.write(" = ")
 	for i, val := range stmt.Values {
 		if i > 0 {

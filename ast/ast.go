@@ -66,11 +66,18 @@ type Assignment struct {
 func (a *Assignment) statementNode()       {}
 func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
 
+// MultiAssignTarget represents one target in a multi-assignment.
+// Name is always set. Index is non-nil for indexed targets like arr[i].
+type MultiAssignTarget struct {
+	Name  string     // variable name
+	Index Expression // optional: index expression for arr[i] (nil for simple ident)
+}
+
 // MultiAssignment represents a multi-target assignment: a, b := func(x)
 type MultiAssignment struct {
-	Token   lexer.Token  // the := token
-	Targets []string     // variable names on the left side
-	Values  []Expression // expressions on the right side
+	Token   lexer.Token         // the := token
+	Targets []MultiAssignTarget // targets on the left side
+	Values  []Expression        // expressions on the right side
 }
 
 func (m *MultiAssignment) statementNode()       {}

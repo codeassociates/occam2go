@@ -366,15 +366,32 @@ func (p *Parser) parseAssignment() *ast.Assignment {
 }
 
 func (p *Parser) parseMultiAssignment() *ast.MultiAssignment {
+	firstTarget := ast.MultiAssignTarget{Name: p.curToken.Literal}
+	return p.parseMultiAssignmentFrom(firstTarget)
+}
+
+// parseMultiAssignmentFrom parses a multi-assignment given the first target already parsed.
+// The current token should be on the first target's last token (ident or ']').
+// Peek token should be COMMA.
+func (p *Parser) parseMultiAssignmentFrom(firstTarget ast.MultiAssignTarget) *ast.MultiAssignment {
 	stmt := &ast.MultiAssignment{
-		Targets: []string{p.curToken.Literal},
+		Targets: []ast.MultiAssignTarget{firstTarget},
 	}
 
-	// Parse comma-separated targets: a, b, c
+	// Parse comma-separated targets: a, b[i], c
 	for p.peekTokenIs(lexer.COMMA) {
 		p.nextToken() // consume comma
-		p.nextToken() // move to next ident
-		stmt.Targets = append(stmt.Targets, p.curToken.Literal)
+		p.nextToken() // move to next target
+		target := ast.MultiAssignTarget{Name: p.curToken.Literal}
+		if p.peekTokenIs(lexer.LBRACKET) {
+			p.nextToken() // move to [
+			p.nextToken() // move past [
+			target.Index = p.parseExpression(LOWEST)
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+		}
+		stmt.Targets = append(stmt.Targets, target)
 	}
 
 	p.nextToken() // move to :=
@@ -544,6 +561,11 @@ func (p *Parser) parseIndexedOperation() ast.Statement {
 	}
 
 	// Check what follows ]
+	if p.peekTokenIs(lexer.COMMA) {
+		// Multi-assignment starting with indexed target: name[index], ... := ...
+		firstTarget := ast.MultiAssignTarget{Name: name, Index: index}
+		return p.parseMultiAssignmentFrom(firstTarget)
+	}
 	if p.peekTokenIs(lexer.ASSIGN) {
 		// Indexed assignment: name[index] := value
 		p.nextToken() // move to :=
