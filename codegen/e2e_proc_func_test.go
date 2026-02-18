@@ -99,6 +99,87 @@ func TestE2E_AbbreviationWithExpression(t *testing.T) {
 	}
 }
 
+func TestE2E_ProcColonTerminator(t *testing.T) {
+	occam := `PROC double(VAL INT x, INT result)
+  SEQ
+    result := x * 2
+:
+
+SEQ
+  INT n, doubled:
+  n := 21
+  double(n, doubled)
+  print.int(doubled)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_FunctionISColonTerminator(t *testing.T) {
+	occam := `INT FUNCTION square(VAL INT x)
+  IS x * x
+:
+
+SEQ
+  INT n:
+  n := square(7)
+  print.int(n)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "49\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_FunctionValofColonTerminator(t *testing.T) {
+	occam := `INT FUNCTION max(VAL INT a, VAL INT b)
+  INT result:
+  VALOF
+    IF
+      a > b
+        result := a
+      TRUE
+        result := b
+    RESULT result
+:
+
+SEQ
+  print.int(max(10, 20))
+`
+	output := transpileCompileRun(t, occam)
+	expected := "20\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultipleProcColonTerminator(t *testing.T) {
+	occam := `PROC add(VAL INT a, VAL INT b, INT result)
+  result := a + b
+:
+
+PROC double(VAL INT x, INT result)
+  SEQ
+    result := x * 2
+:
+
+SEQ
+  INT sum, doubled:
+  add(10, 11, sum)
+  double(sum, doubled)
+  print.int(doubled)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_NonValAbbreviation(t *testing.T) {
 	occam := `SEQ
   INT x:

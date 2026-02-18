@@ -1572,14 +1572,23 @@ func (p *Parser) parseProcDecl() *ast.ProcDecl {
 		p.addError("expected indented body after PROC declaration")
 		return proc
 	}
+	procLevel := p.indentLevel
 	p.nextToken() // consume INDENT
 
 	// Parse the procedure body (first statement in the indented block)
 	p.nextToken()
 	proc.Body = p.parseStatement()
 
-	// Consume remaining statements at this level and the DEDENT
-	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+	// Consume remaining tokens and DEDENTs back to PROC's indentation level
+	for !p.curTokenIs(lexer.EOF) {
+		if p.curTokenIs(lexer.DEDENT) && p.indentLevel <= procLevel {
+			break
+		}
+		p.nextToken()
+	}
+
+	// Optionally consume KRoC-style colon terminator
+	if p.peekTokenIs(lexer.COLON) {
 		p.nextToken()
 	}
 
@@ -1774,6 +1783,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.addError("expected indented body after FUNCTION declaration")
 		return fn
 	}
+	funcLevel := p.indentLevel
 	p.nextToken() // consume INDENT
 	p.nextToken() // move into body
 
@@ -1782,8 +1792,16 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.nextToken() // move past IS
 		fn.ResultExpr = p.parseExpression(LOWEST)
 
-		// Consume to DEDENT
-		for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+		// Consume remaining tokens and DEDENTs back to function's indentation level
+		for !p.curTokenIs(lexer.EOF) {
+			if p.curTokenIs(lexer.DEDENT) && p.indentLevel <= funcLevel {
+				break
+			}
+			p.nextToken()
+		}
+
+		// Optionally consume KRoC-style colon terminator
+		if p.peekTokenIs(lexer.COLON) {
 			p.nextToken()
 		}
 		return fn
@@ -1840,8 +1858,16 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		fn.ResultExpr = p.parseExpression(LOWEST)
 	}
 
-	// Consume to the function's DEDENT
-	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+	// Consume remaining tokens and DEDENTs back to function's indentation level
+	for !p.curTokenIs(lexer.EOF) {
+		if p.curTokenIs(lexer.DEDENT) && p.indentLevel <= funcLevel {
+			break
+		}
+		p.nextToken()
+	}
+
+	// Optionally consume KRoC-style colon terminator
+	if p.peekTokenIs(lexer.COLON) {
 		p.nextToken()
 	}
 
