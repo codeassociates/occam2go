@@ -550,6 +550,29 @@ func TestE2E_ReplicatedPar(t *testing.T) {
 	}
 }
 
+func TestE2E_ReplicatedIf(t *testing.T) {
+	// Test replicated IF: find first matching element
+	occam := `SEQ
+  INT result:
+  result := -1
+  [5]INT arr:
+  arr[0] := 10
+  arr[1] := 20
+  arr[2] := 30
+  arr[3] := 40
+  arr[4] := 50
+  IF i = 0 FOR 5
+    arr[i] = 30
+      result := i
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ArrayBasic(t *testing.T) {
 	// Test basic array: declare, store, load
 	occam := `SEQ

@@ -488,6 +488,46 @@ func TestReplicatedPar(t *testing.T) {
 	}
 }
 
+func TestReplicatedIf(t *testing.T) {
+	input := `IF i = 0 FOR 5
+  i = 3
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ifStmt, ok := program.Statements[0].(*ast.IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement, got %T", program.Statements[0])
+	}
+
+	if ifStmt.Replicator == nil {
+		t.Fatal("expected replicator on IF statement")
+	}
+
+	if ifStmt.Replicator.Variable != "i" {
+		t.Errorf("expected variable 'i', got %s", ifStmt.Replicator.Variable)
+	}
+
+	if len(ifStmt.Choices) != 1 {
+		t.Fatalf("expected 1 choice, got %d", len(ifStmt.Choices))
+	}
+
+	if ifStmt.Choices[0].Condition == nil {
+		t.Error("expected condition on choice")
+	}
+
+	if ifStmt.Choices[0].Body == nil {
+		t.Error("expected body on choice")
+	}
+}
+
 func TestArrayDecl(t *testing.T) {
 	input := `[5]INT arr:
 `

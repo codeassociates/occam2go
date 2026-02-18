@@ -75,7 +75,7 @@ These features are needed to transpile the KRoC course module (`kroc/modules/cou
 | **PROC terminator `:` ** | Standalone `:` at the end of a PROC/FUNCTION body (KRoC style). | all .occ files |
 | **Nested PROCs/FUNCTIONs** | Local PROC/FUNCTION definitions inside a PROC body. | float_io.occ, stringbuf.occ |
 | **Multi-result FUNCTIONs** | `INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`. | random.occ, utils.occ, string.occ, float_io.occ |
-| **Replicated IF** | `IF i = 0 FOR n` — replicated conditional. | utils.occ, file_in.occ, string.occ, float_io.occ |
+| ~~**Replicated IF**~~ | ~~`IF i = 0 FOR n` — replicated conditional.~~ **DONE** | utils.occ, file_in.occ, string.occ, float_io.occ |
 | **Hex integer literals** | `#FF`, `#80000000` — prefixed with `#`. | float_io.occ, stringbuf.occ |
 | **Checked arithmetic** | `TIMES`, `PLUS`, `MINUS` — modular (wrapping) arithmetic operators. | demo_cycles.occ, random.occ, utils.occ |
 | **`MOSTNEG INT`** | Most-negative integer constant. | utils.occ |
