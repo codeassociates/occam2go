@@ -157,11 +157,13 @@ func (p *Parser) parseStatement() ast.Statement {
 	}
 
 	switch p.curToken.Type {
+	case lexer.VAL:
+		return p.parseAbbreviation()
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) {
 			return p.parseFuncDecl()
 		}
-		return p.parseVarDecl()
+		return p.parseVarDeclOrAbbreviation()
 	case lexer.LBRACKET:
 		return p.parseArrayDecl()
 	case lexer.CHAN:
@@ -245,6 +247,104 @@ func (p *Parser) parseVarDecl() *ast.VarDecl {
 	}
 
 	return decl
+}
+
+// parseVarDeclOrAbbreviation parses either a variable declaration (INT x:)
+// or a non-VAL abbreviation (INT x IS expr:). Called when current token is a type keyword.
+func (p *Parser) parseVarDeclOrAbbreviation() ast.Statement {
+	typeToken := p.curToken
+	typeName := p.curToken.Literal
+
+	// Consume the name
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	name := p.curToken.Literal
+
+	// Check if this is an abbreviation (next token is IS)
+	if p.peekTokenIs(lexer.IS) {
+		p.nextToken() // consume IS
+		p.nextToken() // move to expression
+		value := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+
+		return &ast.Abbreviation{
+			Token: typeToken,
+			IsVal: false,
+			Type:  typeName,
+			Name:  name,
+			Value: value,
+		}
+	}
+
+	// Otherwise, it's a regular variable declaration — continue parsing names
+	decl := &ast.VarDecl{
+		Token: typeToken,
+		Type:  typeName,
+		Names: []string{name},
+	}
+
+	// Parse additional comma-separated names
+	for p.peekTokenIs(lexer.COMMA) {
+		p.nextToken() // consume comma
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		decl.Names = append(decl.Names, p.curToken.Literal)
+	}
+
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return decl
+}
+
+// parseAbbreviation parses a VAL abbreviation: VAL INT x IS expr:
+// Current token is VAL.
+func (p *Parser) parseAbbreviation() *ast.Abbreviation {
+	token := p.curToken // VAL token
+
+	// Expect a type keyword
+	p.nextToken()
+	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
+		!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
+		p.addError(fmt.Sprintf("expected type after VAL, got %s", p.curToken.Type))
+		return nil
+	}
+	typeName := p.curToken.Literal
+
+	// Expect name
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	name := p.curToken.Literal
+
+	// Expect IS
+	if !p.expectPeek(lexer.IS) {
+		return nil
+	}
+
+	// Parse expression
+	p.nextToken()
+	value := p.parseExpression(LOWEST)
+
+	// Expect colon
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return &ast.Abbreviation{
+		Token: token,
+		IsVal: true,
+		Type:  typeName,
+		Name:  name,
+		Value: value,
+	}
 }
 
 func (p *Parser) parseAssignment() *ast.Assignment {

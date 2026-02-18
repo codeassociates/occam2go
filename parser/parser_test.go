@@ -1824,3 +1824,132 @@ func TestSizeExpressionInBinaryExpr(t *testing.T) {
 		t.Fatalf("expected SizeExpr as left of BinaryExpr, got %T", binExpr.Left)
 	}
 }
+
+func TestValAbbreviation(t *testing.T) {
+	input := `VAL INT x IS 42:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if !abbr.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+	if abbr.Type != "INT" {
+		t.Errorf("expected type INT, got %s", abbr.Type)
+	}
+	if abbr.Name != "x" {
+		t.Errorf("expected name 'x', got %s", abbr.Name)
+	}
+	if abbr.Value == nil {
+		t.Fatal("expected non-nil Value")
+	}
+	lit, ok := abbr.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", abbr.Value)
+	}
+	if lit.Value != 42 {
+		t.Errorf("expected value 42, got %d", lit.Value)
+	}
+}
+
+func TestNonValAbbreviation(t *testing.T) {
+	input := `INT y IS z:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if abbr.IsVal {
+		t.Error("expected IsVal to be false")
+	}
+	if abbr.Type != "INT" {
+		t.Errorf("expected type INT, got %s", abbr.Type)
+	}
+	if abbr.Name != "y" {
+		t.Errorf("expected name 'y', got %s", abbr.Name)
+	}
+	ident, ok := abbr.Value.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier, got %T", abbr.Value)
+	}
+	if ident.Value != "z" {
+		t.Errorf("expected value 'z', got %s", ident.Value)
+	}
+}
+
+func TestValBoolAbbreviation(t *testing.T) {
+	input := `VAL BOOL flag IS TRUE:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if !abbr.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+	if abbr.Type != "BOOL" {
+		t.Errorf("expected type BOOL, got %s", abbr.Type)
+	}
+	if abbr.Name != "flag" {
+		t.Errorf("expected name 'flag', got %s", abbr.Name)
+	}
+}
+
+func TestAbbreviationWithExpression(t *testing.T) {
+	input := `VAL INT sum IS (a + b):
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if abbr.Name != "sum" {
+		t.Errorf("expected name 'sum', got %s", abbr.Name)
+	}
+
+	// Value should be a binary expression (parens are stripped during parsing)
+	_, ok = abbr.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", abbr.Value)
+	}
+}

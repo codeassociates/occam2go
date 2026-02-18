@@ -427,3 +427,15 @@ type RecordField struct {
 
 func (rd *RecordDecl) statementNode()       {}
 func (rd *RecordDecl) TokenLiteral() string { return rd.Token.Literal }
+
+// Abbreviation represents an abbreviation: VAL INT x IS 42: or INT y IS z:
+type Abbreviation struct {
+	Token lexer.Token // VAL or type token
+	IsVal bool        // true for VAL abbreviations
+	Type  string      // "INT", "BYTE", "BOOL", etc.
+	Name  string      // variable name
+	Value Expression  // the expression
+}
+
+func (a *Abbreviation) statementNode()       {}
+func (a *Abbreviation) TokenLiteral() string { return a.Token.Literal }

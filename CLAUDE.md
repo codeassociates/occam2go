@@ -102,6 +102,8 @@ Six packages, one pipeline:
 | `PROC f(CHAN OF INT c?)` | `func f(c <-chan int)` (input/receive-only) |
 | `PROC f(CHAN OF INT c!)` | `func f(c chan<- int)` (output/send-only) |
 | Non-VAL params | `*type` pointer params, callers pass `&arg` |
+| `VAL INT x IS 42:` | `x := 42` (abbreviation/named constant) |
+| `INT y IS z:` | `y := z` (non-VAL abbreviation) |
 | `#INCLUDE "file"` | Textual inclusion (preprocessor, pre-lexer) |
 | `#IF`/`#ELSE`/`#ENDIF` | Conditional compilation (preprocessor) |
 | `#DEFINE SYMBOL` | Define preprocessor symbol |
@@ -138,8 +140,8 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator.
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards and timer timeouts), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, and []CHAN params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`), FUNCTION (IS and VALOF forms), replicators on SEQ and PAR, arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, string literals, built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator.
 
 ## Not Yet Implemented
 
-Abbreviations (`name IS expr:`), PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.

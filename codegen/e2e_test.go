@@ -1439,3 +1439,43 @@ func TestE2E_SizeString(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ValAbbreviation(t *testing.T) {
+	occam := `SEQ
+  VAL INT x IS 42:
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AbbreviationWithExpression(t *testing.T) {
+	occam := `SEQ
+  INT a:
+  a := 10
+  VAL INT b IS (a + 5):
+  print.int(b)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_NonValAbbreviation(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 7
+  INT y IS x:
+  print.int(y)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
