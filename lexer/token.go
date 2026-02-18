@@ -58,6 +58,7 @@ const (
 	ELSE
 	WHILE
 	FOR
+	FROM
 	PROC
 	FUNC
 	FUNCTION
@@ -138,6 +139,7 @@ var tokenNames = map[TokenType]string{
 	ELSE:      "ELSE",
 	WHILE:     "WHILE",
 	FOR:       "FOR",
+	FROM:      "FROM",
 	PROC:      "PROC",
 	FUNC:      "FUNC",
 	FUNCTION:  "FUNCTION",
@@ -176,6 +178,7 @@ var keywords = map[string]TokenType{
 	"ELSE":  ELSE,
 	"WHILE": WHILE,
 	"FOR":   FOR,
+	"FROM":  FROM,
 	"PROC":  PROC,
 	"FUNC":     FUNC,
 	"FUNCTION": FUNCTION,

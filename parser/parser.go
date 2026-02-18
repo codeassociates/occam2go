@@ -400,6 +400,11 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 	p.nextToken()
 	size := p.parseExpression(LOWEST)
 
+	// Check if this is a slice assignment: [arr FROM start FOR length] := value
+	if p.peekTokenIs(lexer.FROM) {
+		return p.parseSliceAssignment(lbracketToken, size)
+	}
+
 	// Expect ]
 	if !p.expectPeek(lexer.RBRACKET) {
 		return nil
@@ -485,6 +490,45 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 	}
 
 	return decl
+}
+
+// parseSliceAssignment parses [arr FROM start FOR length] := value
+// Called from parseArrayDecl when FROM is detected after the array expression.
+// lbracketToken is the [ token, arrayExpr is the already-parsed array expression.
+func (p *Parser) parseSliceAssignment(lbracketToken lexer.Token, arrayExpr ast.Expression) ast.Statement {
+	p.nextToken() // consume FROM
+	p.nextToken() // move to start expression
+	startExpr := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.FOR) {
+		return nil
+	}
+	p.nextToken() // move to length expression
+	lengthExpr := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(lexer.RBRACKET) {
+		return nil
+	}
+
+	if !p.expectPeek(lexer.ASSIGN) {
+		return nil
+	}
+
+	assignToken := p.curToken
+	p.nextToken() // move past :=
+
+	value := p.parseExpression(LOWEST)
+
+	return &ast.Assignment{
+		Token: assignToken,
+		SliceTarget: &ast.SliceExpr{
+			Token:  lbracketToken,
+			Array:  arrayExpr,
+			Start:  startExpr,
+			Length: lengthExpr,
+		},
+		Value: value,
+	}
 }
 
 func (p *Parser) parseIndexedOperation() ast.Statement {
@@ -2264,6 +2308,30 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Token:    token,
 			Operator: "~",
 			Right:    p.parseExpression(PREFIX),
+		}
+	case lexer.LBRACKET:
+		// Slice expression: [arr FROM start FOR length]
+		lbracket := p.curToken
+		p.nextToken() // move past [
+		arrayExpr := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.FROM) {
+			return nil
+		}
+		p.nextToken() // move past FROM
+		startExpr := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.FOR) {
+			return nil
+		}
+		p.nextToken() // move past FOR
+		lengthExpr := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+		left = &ast.SliceExpr{
+			Token:  lbracket,
+			Array:  arrayExpr,
+			Start:  startExpr,
+			Length: lengthExpr,
 		}
 	case lexer.SIZE_KW:
 		token := p.curToken

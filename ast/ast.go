@@ -54,12 +54,13 @@ type ArrayDecl struct {
 func (a *ArrayDecl) statementNode()       {}
 func (a *ArrayDecl) TokenLiteral() string { return a.Token.Literal }
 
-// Assignment represents an assignment: x := 5 or arr[i] := 5
+// Assignment represents an assignment: x := 5 or arr[i] := 5 or [arr FROM n FOR m] := value
 type Assignment struct {
-	Token lexer.Token // the := token
-	Name  string      // variable name
-	Index Expression  // optional: index expression for arr[i] := x (nil for simple assignments)
-	Value Expression  // the value being assigned
+	Token       lexer.Token // the := token
+	Name        string      // variable name
+	Index       Expression  // optional: index expression for arr[i] := x (nil for simple assignments)
+	SliceTarget *SliceExpr  // optional: slice target for [arr FROM n FOR m] := value
+	Value       Expression  // the value being assigned
 }
 
 func (a *Assignment) statementNode()       {}
@@ -448,6 +449,17 @@ type RecordField struct {
 
 func (rd *RecordDecl) statementNode()       {}
 func (rd *RecordDecl) TokenLiteral() string { return rd.Token.Literal }
+
+// SliceExpr represents an array slice: [arr FROM start FOR length]
+type SliceExpr struct {
+	Token  lexer.Token // the [ token
+	Array  Expression  // the array being sliced
+	Start  Expression  // start index
+	Length Expression  // number of elements
+}
+
+func (se *SliceExpr) expressionNode()      {}
+func (se *SliceExpr) TokenLiteral() string { return se.Token.Literal }
 
 // Abbreviation represents an abbreviation: VAL INT x IS 42: or INT y IS z:
 type Abbreviation struct {
