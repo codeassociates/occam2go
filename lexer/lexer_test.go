@@ -221,6 +221,55 @@ func TestBitwiseVsArithmetic(t *testing.T) {
 	}
 }
 
+func TestHexLiterals(t *testing.T) {
+	input := "x := #FF\n"
+	tests := []struct {
+		expectedType    TokenType
+		expectedLiteral string
+	}{
+		{IDENT, "x"},
+		{ASSIGN, ":="},
+		{INT, "0xFF"},
+		{NEWLINE, "\\n"},
+		{EOF, ""},
+	}
+
+	l := New(input)
+	for i, tt := range tests {
+		tok := l.NextToken()
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q (literal=%q)",
+				i, tt.expectedType, tok.Type, tok.Literal)
+		}
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+
+	// Test lowercase hex digits
+	input2 := "#1a2b\n"
+	l2 := New(input2)
+	tok := l2.NextToken()
+	if tok.Type != INT {
+		t.Fatalf("hex lowercase - type wrong. expected=%q, got=%q", INT, tok.Type)
+	}
+	if tok.Literal != "0x1a2b" {
+		t.Fatalf("hex lowercase - literal wrong. expected=%q, got=%q", "0x1a2b", tok.Literal)
+	}
+
+	// Test #0
+	input3 := "#0\n"
+	l3 := New(input3)
+	tok3 := l3.NextToken()
+	if tok3.Type != INT {
+		t.Fatalf("hex zero - type wrong. expected=%q, got=%q", INT, tok3.Type)
+	}
+	if tok3.Literal != "0x0" {
+		t.Fatalf("hex zero - literal wrong. expected=%q, got=%q", "0x0", tok3.Literal)
+	}
+}
+
 func TestNestedIndentation(t *testing.T) {
 	input := `SEQ
   INT x:

@@ -2184,3 +2184,57 @@ func TestChanParamShorthand(t *testing.T) {
 		t.Errorf("param 1: expected ChanElemType=INT, got %s", p1.ChanElemType)
 	}
 }
+
+func TestHexIntegerLiteral(t *testing.T) {
+	input := `x := #FF
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	intLit, ok := assign.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", assign.Value)
+	}
+
+	if intLit.Value != 255 {
+		t.Errorf("expected value 255, got %d", intLit.Value)
+	}
+}
+
+func TestHexIntegerLiteralLarge(t *testing.T) {
+	input := `x := #80000000
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	intLit, ok := assign.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", assign.Value)
+	}
+
+	if intLit.Value != 0x80000000 {
+		t.Errorf("expected value %d, got %d", int64(0x80000000), intLit.Value)
+	}
+}

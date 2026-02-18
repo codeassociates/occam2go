@@ -168,6 +168,15 @@ func (l *Lexer) NextToken() Token {
 		} else {
 			tok = l.newToken(GT, l.ch)
 		}
+	case '#':
+		if isHexDigit(l.peekChar()) {
+			tok.Type = INT
+			tok.Literal = l.readHexNumber()
+			tok.Line = l.line
+			return tok
+		} else {
+			tok = l.newToken(ILLEGAL, l.ch)
+		}
 	case '-':
 		if l.peekChar() == '-' {
 			l.skipComment()
@@ -246,6 +255,16 @@ func (l *Lexer) readNumber() string {
 		l.readChar()
 	}
 	return l.input[position:l.position]
+}
+
+func (l *Lexer) readHexNumber() string {
+	// Current char is '#', skip it
+	l.readChar()
+	position := l.position
+	for isHexDigit(l.ch) {
+		l.readChar()
+	}
+	return "0x" + l.input[position:l.position]
 }
 
 func (l *Lexer) readString() string {
@@ -353,6 +372,10 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return ch >= '0' && ch <= '9'
+}
+
+func isHexDigit(ch byte) bool {
+	return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
 }
 
 // Tokenize returns all tokens from the input

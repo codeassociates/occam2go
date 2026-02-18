@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/codeassociates/occam2go/ast"
 	"github.com/codeassociates/occam2go/lexer"
@@ -2141,7 +2142,13 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			left = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 		}
 	case lexer.INT:
-		val, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+		base := 10
+		literal := p.curToken.Literal
+		if strings.HasPrefix(literal, "0x") || strings.HasPrefix(literal, "0X") {
+			base = 16
+			literal = literal[2:]
+		}
+		val, err := strconv.ParseInt(literal, base, 64)
 		if err != nil {
 			p.addError(fmt.Sprintf("could not parse %q as integer", p.curToken.Literal))
 			return nil
