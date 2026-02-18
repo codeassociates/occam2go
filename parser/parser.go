@@ -1604,29 +1604,45 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Check for []CHAN OF <type> (channel array parameter)
+		// Check for []CHAN OF <type> or []TYPE (open array parameter)
 		if p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
 			p.nextToken() // consume ]
-			if !p.expectPeek(lexer.CHAN) {
-				return params
-			}
-			param.IsChan = true
-			param.IsChanArray = true
-			if !p.expectPeek(lexer.OF) {
-				return params
-			}
-			p.nextToken() // move to element type
-			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+			p.nextToken() // move past ]
+			if p.curTokenIs(lexer.CHAN) {
+				// []CHAN OF <type> (channel array parameter)
+				param.IsChan = true
+				param.IsChanArray = true
+				if !p.expectPeek(lexer.OF) {
+					return params
+				}
+				p.nextToken() // move to element type
+				if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
+					p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
+					p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
+					param.ChanElemType = p.curToken.Literal
+				} else if p.curTokenIs(lexer.IDENT) {
+					param.ChanElemType = p.curToken.Literal
+				} else {
+					p.addError(fmt.Sprintf("expected type after []CHAN OF, got %s", p.curToken.Type))
+					return params
+				}
+				p.nextToken()
+			} else if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
 				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
 				p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
-				param.ChanElemType = p.curToken.Literal
-			} else if p.curTokenIs(lexer.IDENT) {
-				param.ChanElemType = p.curToken.Literal
+				// []TYPE (open array parameter)
+				param.IsOpenArray = true
+				param.Type = p.curToken.Literal
+				p.nextToken()
+			} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
+				// []RECORD (open array of record type)
+				param.IsOpenArray = true
+				param.Type = p.curToken.Literal
+				p.nextToken()
 			} else {
-				p.addError(fmt.Sprintf("expected type after []CHAN OF, got %s", p.curToken.Type))
+				p.addError(fmt.Sprintf("expected type after [], got %s", p.curToken.Type))
 				return params
 			}
-			p.nextToken()
 		} else if p.curTokenIs(lexer.CHAN) {
 			// Check for CHAN OF <type>
 			param.IsChan = true

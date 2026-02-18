@@ -464,6 +464,17 @@ func TestSizeOperator(t *testing.T) {
 	}
 }
 
+func TestOpenArrayParamGen(t *testing.T) {
+	input := `PROC worker(VAL []INT arr, []BYTE data)
+  SKIP
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "func worker(arr []int, data []byte)") {
+		t.Errorf("expected 'func worker(arr []int, data []byte)' in output, got:\n%s", output)
+	}
+}
+
 func TestAbbreviation(t *testing.T) {
 	tests := []struct {
 		input    string
