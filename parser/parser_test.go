@@ -2317,3 +2317,132 @@ func TestHexIntegerLiteralLarge(t *testing.T) {
 		t.Errorf("expected value %d, got %d", int64(0x80000000), intLit.Value)
 	}
 }
+
+func TestNestedProcDecl(t *testing.T) {
+	input := `PROC outer(VAL INT n)
+  INT x:
+  PROC inner(VAL INT y)
+    x := y
+  :
+  SEQ
+    inner(n)
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if proc.Name != "outer" {
+		t.Errorf("expected name 'outer', got %s", proc.Name)
+	}
+
+	// Body should have 3 statements: VarDecl, nested ProcDecl, SeqBlock
+	if len(proc.Body) != 3 {
+		t.Fatalf("expected 3 body statements, got %d", len(proc.Body))
+	}
+
+	// First: INT x:
+	if _, ok := proc.Body[0].(*ast.VarDecl); !ok {
+		t.Errorf("expected VarDecl as first body statement, got %T", proc.Body[0])
+	}
+
+	// Second: nested PROC inner
+	nestedProc, ok := proc.Body[1].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected nested ProcDecl, got %T", proc.Body[1])
+	}
+	if nestedProc.Name != "inner" {
+		t.Errorf("expected nested proc name 'inner', got %s", nestedProc.Name)
+	}
+
+	// Third: SEQ block
+	if _, ok := proc.Body[2].(*ast.SeqBlock); !ok {
+		t.Errorf("expected SeqBlock as third body statement, got %T", proc.Body[2])
+	}
+}
+
+func TestNestedFuncDecl(t *testing.T) {
+	input := `PROC compute(VAL INT n)
+  INT FUNCTION double(VAL INT x)
+    IS x * 2
+  SEQ
+    print.int(double(n))
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	// Body should have 2 statements: nested FuncDecl, SeqBlock
+	if len(proc.Body) != 2 {
+		t.Fatalf("expected 2 body statements, got %d", len(proc.Body))
+	}
+
+	fn, ok := proc.Body[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected nested FuncDecl, got %T", proc.Body[0])
+	}
+	if fn.Name != "double" {
+		t.Errorf("expected nested func name 'double', got %s", fn.Name)
+	}
+
+	if _, ok := proc.Body[1].(*ast.SeqBlock); !ok {
+		t.Errorf("expected SeqBlock as second body statement, got %T", proc.Body[1])
+	}
+}
+
+func TestProcLocalVarDecls(t *testing.T) {
+	input := `PROC foo(VAL INT n)
+  INT x:
+  INT y:
+  SEQ
+    x := n
+    y := n * 2
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	// Body should have 3 statements: 2 VarDecls + SeqBlock
+	if len(proc.Body) != 3 {
+		t.Fatalf("expected 3 body statements, got %d", len(proc.Body))
+	}
+
+	for i := 0; i < 2; i++ {
+		if _, ok := proc.Body[i].(*ast.VarDecl); !ok {
+			t.Errorf("expected VarDecl at index %d, got %T", i, proc.Body[i])
+		}
+	}
+
+	if _, ok := proc.Body[2].(*ast.SeqBlock); !ok {
+		t.Errorf("expected SeqBlock at index 2, got %T", proc.Body[2])
+	}
+}

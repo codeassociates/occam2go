@@ -125,7 +125,7 @@ type ProcDecl struct {
 	Token  lexer.Token // the PROC token
 	Name   string
 	Params []ProcParam
-	Body   Statement // usually a SEQ block
+	Body   []Statement // local declarations + body process
 }
 
 func (p *ProcDecl) statementNode()       {}

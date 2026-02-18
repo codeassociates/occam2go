@@ -1604,20 +1604,45 @@ func (p *Parser) parseProcDecl() *ast.ProcDecl {
 		p.addError("expected indented body after PROC declaration")
 		return proc
 	}
-	procLevel := p.indentLevel
 	p.nextToken() // consume INDENT
 
-	// Parse the procedure body (first statement in the indented block)
+	// Parse all statements in the body (local declarations + body process)
+	bodyLevel := p.indentLevel
 	p.nextToken()
-	proc.Body = p.parseStatement()
 
-	// Consume remaining tokens and DEDENTs back to PROC's indentation level
 	for !p.curTokenIs(lexer.EOF) {
-		if p.curTokenIs(lexer.DEDENT) && p.indentLevel <= procLevel {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENTs
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < bodyLevel {
+				goto procBodyDone
+			}
+			p.nextToken()
+		}
+
+		// Skip more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) || p.indentLevel < bodyLevel {
 			break
 		}
-		p.nextToken()
+
+		stmt := p.parseStatement()
+		if stmt != nil {
+			proc.Body = append(proc.Body, stmt)
+		}
+
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
 	}
+procBodyDone:
 
 	// Optionally consume KRoC-style colon terminator
 	if p.peekTokenIs(lexer.COLON) {
