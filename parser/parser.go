@@ -160,6 +160,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case lexer.VAL:
 		return p.parseAbbreviation()
+	case lexer.INITIAL:
+		return p.parseInitialDecl()
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
 		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) || p.peekTokenIs(lexer.COMMA) {
 			return p.parseFuncDecl()
@@ -348,6 +350,50 @@ func (p *Parser) parseAbbreviation() *ast.Abbreviation {
 		Type:  typeName,
 		Name:  name,
 		Value: value,
+	}
+}
+
+// parseInitialDecl parses an INITIAL declaration: INITIAL INT x IS expr:
+// Current token is INITIAL.
+func (p *Parser) parseInitialDecl() *ast.Abbreviation {
+	token := p.curToken // INITIAL token
+
+	// Expect a type keyword
+	p.nextToken()
+	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
+		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
+		!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
+		p.addError(fmt.Sprintf("expected type after INITIAL, got %s", p.curToken.Type))
+		return nil
+	}
+	typeName := p.curToken.Literal
+
+	// Expect name
+	if !p.expectPeek(lexer.IDENT) {
+		return nil
+	}
+	name := p.curToken.Literal
+
+	// Expect IS
+	if !p.expectPeek(lexer.IS) {
+		return nil
+	}
+
+	// Parse expression
+	p.nextToken()
+	value := p.parseExpression(LOWEST)
+
+	// Expect colon
+	if !p.expectPeek(lexer.COLON) {
+		return nil
+	}
+
+	return &ast.Abbreviation{
+		Token:     token,
+		IsInitial: true,
+		Type:      typeName,
+		Name:      name,
+		Value:     value,
 	}
 }
 

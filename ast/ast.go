@@ -479,13 +479,14 @@ type SliceExpr struct {
 func (se *SliceExpr) expressionNode()      {}
 func (se *SliceExpr) TokenLiteral() string { return se.Token.Literal }
 
-// Abbreviation represents an abbreviation: VAL INT x IS 42: or INT y IS z:
+// Abbreviation represents an abbreviation: VAL INT x IS 42:, INT y IS z:, or INITIAL INT x IS 42:
 type Abbreviation struct {
-	Token lexer.Token // VAL or type token
-	IsVal bool        // true for VAL abbreviations
-	Type  string      // "INT", "BYTE", "BOOL", etc.
-	Name  string      // variable name
-	Value Expression  // the expression
+	Token     lexer.Token // VAL, INITIAL, or type token
+	IsVal     bool        // true for VAL abbreviations
+	IsInitial bool        // true for INITIAL declarations
+	Type      string      // "INT", "BYTE", "BOOL", etc.
+	Name      string      // variable name
+	Value     Expression  // the expression
 }
 
 func (a *Abbreviation) statementNode()       {}

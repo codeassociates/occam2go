@@ -2314,6 +2314,67 @@ func TestAbbreviationWithExpression(t *testing.T) {
 	}
 }
 
+func TestInitialDecl(t *testing.T) {
+	input := `INITIAL INT x IS 42:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if !abbr.IsInitial {
+		t.Error("expected IsInitial to be true")
+	}
+	if abbr.IsVal {
+		t.Error("expected IsVal to be false")
+	}
+	if abbr.Type != "INT" {
+		t.Errorf("expected type 'INT', got %s", abbr.Type)
+	}
+	if abbr.Name != "x" {
+		t.Errorf("expected name 'x', got %s", abbr.Name)
+	}
+}
+
+func TestInitialDeclWithExpression(t *testing.T) {
+	input := `INITIAL INT left IS (a + b):
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if !abbr.IsInitial {
+		t.Error("expected IsInitial to be true")
+	}
+	if abbr.Name != "left" {
+		t.Errorf("expected name 'left', got %s", abbr.Name)
+	}
+
+	_, ok = abbr.Value.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", abbr.Value)
+	}
+}
+
 func TestOpenArrayParam(t *testing.T) {
 	input := `PROC sum.array(VAL []INT arr, INT result)
   SKIP
