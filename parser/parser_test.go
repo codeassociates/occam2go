@@ -2001,3 +2001,103 @@ func TestOpenArrayParam(t *testing.T) {
 		t.Errorf("param 1: expected Type=INT, got %s", p1.Type)
 	}
 }
+
+func TestChanDeclShorthand(t *testing.T) {
+	input := `CHAN BYTE c:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
+	}
+
+	if decl.ElemType != "BYTE" {
+		t.Errorf("expected element type BYTE, got %s", decl.ElemType)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "c" {
+		t.Errorf("expected name 'c', got %v", decl.Names)
+	}
+}
+
+func TestChanArrayDeclShorthand(t *testing.T) {
+	input := `[5]CHAN INT cs:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
+	}
+
+	if !decl.IsArray {
+		t.Error("expected IsArray=true")
+	}
+
+	if decl.ElemType != "INT" {
+		t.Errorf("expected element type INT, got %s", decl.ElemType)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "cs" {
+		t.Errorf("expected name 'cs', got %v", decl.Names)
+	}
+}
+
+func TestChanParamShorthand(t *testing.T) {
+	input := `PROC worker(CHAN BYTE input?, []CHAN INT cs)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(proc.Params))
+	}
+
+	// First param: CHAN BYTE input?
+	p0 := proc.Params[0]
+	if !p0.IsChan {
+		t.Error("param 0: expected IsChan=true")
+	}
+	if p0.ChanElemType != "BYTE" {
+		t.Errorf("param 0: expected ChanElemType=BYTE, got %s", p0.ChanElemType)
+	}
+	if p0.ChanDir != "?" {
+		t.Errorf("param 0: expected ChanDir=?, got %q", p0.ChanDir)
+	}
+
+	// Second param: []CHAN INT cs
+	p1 := proc.Params[1]
+	if !p1.IsChan || !p1.IsChanArray {
+		t.Error("param 1: expected IsChan=true, IsChanArray=true")
+	}
+	if p1.ChanElemType != "INT" {
+		t.Errorf("param 1: expected ChanElemType=INT, got %s", p1.ChanElemType)
+	}
+}

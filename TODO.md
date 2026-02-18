@@ -68,7 +68,7 @@ These features are needed to transpile the KRoC course module (`kroc/modules/cou
 | Feature | Notes | Used in |
 |---------|-------|---------|
 | ~~**Abbreviations**~~ | ~~`VAL INT x IS 1:`, `VAL BYTE ch IS 'A':` — named constants.~~ **DONE** | consts.inc, all .occ files |
-| **`CHAN BYTE` shorthand** | `CHAN BYTE out!` without `OF`. KRoC allows omitting `OF` for channel types. | all .occ files |
+| ~~**`CHAN BYTE` shorthand**~~ | ~~`CHAN BYTE out!` without `OF`. KRoC allows omitting `OF` for channel types.~~ **DONE** | all .occ files |
 | ~~**Open array params**~~ | ~~`VAL []BYTE s`, `[]BYTE s` — unsized array/slice parameters for PROCs and FUNCTIONs. (`[]CHAN OF T` is already supported.)~~ **DONE** | utils.occ, string.occ, file_in.occ, stringbuf.occ |
 | **BYTE literals** | `'A'`, `'0'`, `' '` — single-quoted character literals. | utils.occ, file_in.occ, string.occ |
 | **Occam escape sequences** | `*n` (newline), `*c` (carriage return), `*t` (tab) — occam uses `*` not `\` for escapes in strings and byte literals. | utils.occ, file_in.occ |

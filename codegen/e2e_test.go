@@ -1498,3 +1498,19 @@ func TestE2E_NonValAbbreviation(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2EChanShorthand(t *testing.T) {
+	occam := `SEQ
+  CHAN INT c:
+  INT result:
+  PAR
+    c ! 42
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
