@@ -29,6 +29,9 @@ type Generator struct {
 	// Record support
 	recordDefs map[string]*ast.RecordDecl
 	recordVars map[string]string // variable name → record type name
+
+	// Nesting level: 0 = package level, >0 = inside a function
+	nestingLevel int
 }
 
 // Built-in print procedures
@@ -76,6 +79,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
+			g.collectNestedProcSigs(proc.Body)
 		}
 		if fn, ok := stmt.(*ast.FuncDecl); ok {
 			g.procSigs[fn.Name] = fn.Params
@@ -145,14 +149,30 @@ func (g *Generator) Generate(program *ast.Program) string {
 	if len(mainStatements) > 0 {
 		g.writeLine("func main() {")
 		g.indent++
+		g.nestingLevel++
 		for _, stmt := range mainStatements {
 			g.generateStatement(stmt)
 		}
+		g.nestingLevel--
 		g.indent--
 		g.writeLine("}")
 	}
 
 	return g.builder.String()
+}
+
+// collectNestedProcSigs recursively collects procedure/function signatures
+// from nested declarations inside PROC bodies.
+func (g *Generator) collectNestedProcSigs(stmts []ast.Statement) {
+	for _, stmt := range stmts {
+		if proc, ok := stmt.(*ast.ProcDecl); ok {
+			g.procSigs[proc.Name] = proc.Params
+			g.collectNestedProcSigs(proc.Body)
+		}
+		if fn, ok := stmt.(*ast.FuncDecl); ok {
+			g.procSigs[fn.Name] = fn.Params
+		}
+	}
 }
 
 func (g *Generator) containsPar(stmt ast.Statement) bool {
@@ -172,8 +192,10 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.ProcDecl:
-		if s.Body != nil && g.containsPar(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsPar(inner) {
+				return true
+			}
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -230,8 +252,10 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.ProcDecl:
-		if s.Body != nil && g.containsPrint(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsPrint(inner) {
+				return true
+			}
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -291,8 +315,10 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.ProcDecl:
-		if s.Body != nil && g.containsTimer(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsTimer(inner) {
+				return true
+			}
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -349,8 +375,10 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.ProcDecl:
-		if s.Body != nil && g.containsStop(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsStop(inner) {
+				return true
+			}
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -691,8 +719,8 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 				}
 			}
 		}
-		if s.Body != nil {
-			g.collectChanProtocols(s.Body)
+		for _, inner := range s.Body {
+			g.collectChanProtocols(inner)
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -747,8 +775,8 @@ func (g *Generator) collectRecordVars(stmt ast.Statement) {
 				}
 			}
 		}
-		if s.Body != nil {
-			g.collectRecordVars(s.Body)
+		for _, inner := range s.Body {
+			g.collectRecordVars(inner)
 		}
 	case *ast.FuncDecl:
 		for _, inner := range s.Body {
@@ -1028,10 +1056,19 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	// Track reference parameters for this procedure
 	oldRefParams := g.refParams
-	g.refParams = make(map[string]bool)
+	newRefParams := make(map[string]bool)
+	// Inherit parent's ref params for closure captures when nested
+	if g.nestingLevel > 0 {
+		for k, v := range oldRefParams {
+			newRefParams[k] = v
+		}
+	}
 	for _, p := range proc.Params {
 		if !p.IsVal && !p.IsChan && !p.IsChanArray && !p.IsOpenArray {
-			g.refParams[p.Name] = true
+			newRefParams[p.Name] = true
+		} else {
+			// Own param shadows any inherited ref param with same name
+			delete(newRefParams, p.Name)
 		}
 		// Register chan params with protocol mappings
 		if p.IsChan || p.IsChanArray {
@@ -1046,16 +1083,24 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 			}
 		}
 	}
+	g.refParams = newRefParams
 
 	// Generate function signature
 	params := g.generateProcParams(proc.Params)
-	g.writeLine(fmt.Sprintf("func %s(%s) {", proc.Name, params))
+	if g.nestingLevel > 0 {
+		// Nested PROC: generate as Go closure
+		g.writeLine(fmt.Sprintf("%s := func(%s) {", proc.Name, params))
+	} else {
+		g.writeLine(fmt.Sprintf("func %s(%s) {", proc.Name, params))
+	}
 	g.indent++
+	g.nestingLevel++
 
-	if proc.Body != nil {
-		g.generateStatement(proc.Body)
+	for _, stmt := range proc.Body {
+		g.generateStatement(stmt)
 	}
 
+	g.nestingLevel--
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
@@ -1141,8 +1186,14 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 		returnTypeStr = "(" + strings.Join(goTypes, ", ") + ")"
 	}
 
-	g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, returnTypeStr))
+	if g.nestingLevel > 0 {
+		// Nested FUNCTION: generate as Go closure
+		g.writeLine(fmt.Sprintf("%s := func(%s) %s {", fn.Name, params, returnTypeStr))
+	} else {
+		g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, returnTypeStr))
+	}
 	g.indent++
+	g.nestingLevel++
 
 	for _, stmt := range fn.Body {
 		g.generateStatement(stmt)
@@ -1160,6 +1211,7 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 		g.write("\n")
 	}
 
+	g.nestingLevel--
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
