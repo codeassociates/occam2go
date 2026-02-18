@@ -105,6 +105,32 @@ func TestE2E_Real32Array(t *testing.T) {
 	}
 }
 
+func TestE2E_HexLiteral(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := #FF
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "255\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_HexLiteralInExpression(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := #0A + #14
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_BitwiseAnd(t *testing.T) {
 	occam := `SEQ
   INT x:
