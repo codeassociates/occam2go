@@ -2705,3 +2705,79 @@ func TestProcLocalVarDecls(t *testing.T) {
 		t.Errorf("expected SeqBlock at index 2, got %T", proc.Body[2])
 	}
 }
+
+func TestCheckedArithmeticOperators(t *testing.T) {
+	tests := []struct {
+		input    string
+		operator string
+	}{
+		{"x := a PLUS b\n", "PLUS"},
+		{"x := a MINUS b\n", "MINUS"},
+		{"x := a TIMES b\n", "TIMES"},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("[%s] expected 1 statement, got %d", tt.operator, len(program.Statements))
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("[%s] expected Assignment, got %T", tt.operator, program.Statements[0])
+		}
+
+		binExpr, ok := assign.Value.(*ast.BinaryExpr)
+		if !ok {
+			t.Fatalf("[%s] expected BinaryExpr, got %T", tt.operator, assign.Value)
+		}
+
+		if binExpr.Operator != tt.operator {
+			t.Errorf("[%s] expected operator %q, got %q", tt.operator, tt.operator, binExpr.Operator)
+		}
+	}
+}
+
+func TestCheckedArithmeticPrecedence(t *testing.T) {
+	// a PLUS b TIMES c should parse as a PLUS (b TIMES c)
+	input := "x := a PLUS b TIMES c\n"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign := program.Statements[0].(*ast.Assignment)
+	binExpr := assign.Value.(*ast.BinaryExpr)
+
+	if binExpr.Operator != "PLUS" {
+		t.Errorf("expected top-level operator PLUS, got %s", binExpr.Operator)
+	}
+
+	rightBin, ok := binExpr.Right.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected right side to be BinaryExpr, got %T", binExpr.Right)
+	}
+	if rightBin.Operator != "TIMES" {
+		t.Errorf("expected right operator TIMES, got %s", rightBin.Operator)
+	}
+}
+
+func TestCheckedAndSymbolMixed(t *testing.T) {
+	// a + (b TIMES c) should work with mixed operators
+	input := "x := a + (b TIMES c)\n"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	assign := program.Statements[0].(*ast.Assignment)
+	binExpr := assign.Value.(*ast.BinaryExpr)
+
+	if binExpr.Operator != "+" {
+		t.Errorf("expected top-level operator +, got %s", binExpr.Operator)
+	}
+}

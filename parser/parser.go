@@ -35,9 +35,12 @@ var precedences = map[lexer.TokenType]int{
 	lexer.AFTER:    LESSGREATER,
 	lexer.PLUS:     SUM,
 	lexer.MINUS:    SUM,
+	lexer.PLUS_KW:  SUM,
+	lexer.MINUS_KW: SUM,
 	lexer.MULTIPLY: PRODUCT,
 	lexer.DIVIDE:   PRODUCT,
 	lexer.MODULO:   PRODUCT,
+	lexer.TIMES:    PRODUCT,
 	lexer.BITAND:   PRODUCT,
 	lexer.LSHIFT:   PRODUCT,
 	lexer.RSHIFT:   PRODUCT,
@@ -2450,6 +2453,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 		switch p.peekToken.Type {
 		case lexer.PLUS, lexer.MINUS, lexer.MULTIPLY, lexer.DIVIDE, lexer.MODULO,
+			lexer.PLUS_KW, lexer.MINUS_KW, lexer.TIMES,
 			lexer.EQ, lexer.NEQ, lexer.LT, lexer.GT, lexer.LE, lexer.GE,
 			lexer.AND, lexer.OR, lexer.AFTER,
 			lexer.BITAND, lexer.BITOR, lexer.BITXOR, lexer.LSHIFT, lexer.RSHIFT:

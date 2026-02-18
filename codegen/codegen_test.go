@@ -351,6 +351,24 @@ func TestStringLiteralInProcCall(t *testing.T) {
 	}
 }
 
+func TestCheckedArithmeticCodegen(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x := a PLUS b\n", "x = (a + b)"},
+		{"x := a MINUS b\n", "x = (a - b)"},
+		{"x := a TIMES b\n", "x = (a * b)"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("expected %q in output for %q, got:\n%s", tt.expected, tt.input, output)
+		}
+	}
+}
+
 func TestSimpleProtocolType(t *testing.T) {
 	input := `PROTOCOL SIGNAL IS INT
 `
