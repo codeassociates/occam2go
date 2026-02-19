@@ -36,9 +36,9 @@ Six packages, one pipeline:
 1. **`preproc/`** — Textual preprocessor (pre-lexer pass). Handles `#IF`/`#ELSE`/`#ENDIF`/`#DEFINE` conditional compilation, `#INCLUDE` file inclusion with search paths, and ignores `#COMMENT`/`#PRAGMA`/`#USE`. Produces a single expanded string for the lexer.
    - `preproc.go` — Preprocessor with condition stack and expression evaluator
 
-2. **`lexer/`** — Tokenizer with indentation tracking. Produces `INDENT`/`DEDENT` tokens from whitespace changes (2-space indent = 1 level). Key files:
+2. **`lexer/`** — Tokenizer with indentation tracking. Produces `INDENT`/`DEDENT` tokens from whitespace changes (2-space indent = 1 level). Suppresses INDENT/DEDENT/NEWLINE inside parentheses (`parenDepth` tracking, like Python). Key files:
    - `token.go` — Token types and keyword lookup
-   - `lexer.go` — Lexer with `indentStack` and `pendingTokens` queue
+   - `lexer.go` — Lexer with `indentStack`, `pendingTokens` queue, and `parenDepth` counter
 
 3. **`parser/`** — Recursive descent parser with Pratt expression parsing. Produces AST.
    - `parser.go` — All parsing logic in one file
@@ -111,7 +111,11 @@ Six packages, one pipeline:
 | Non-VAL params | `*type` pointer params, callers pass `&arg` |
 | `PROC f([]INT arr)` | `func f(arr []int)` (open array param, slice) |
 | `PROC f(VAL []INT arr)` | `func f(arr []int)` (VAL open array, also slice) |
+| `PROC f([2]INT arr)` | `func f(arr *[2]int)` (fixed-size array param) |
+| `PROC f(RESULT INT x)` | `func f(x *int)` (RESULT qualifier, same as non-VAL) |
+| `PROC f(CHAN INT a?, b?)` | Shared-type params (type applies to all until next type) |
 | `VAL INT x IS 42:` | `x := 42` (abbreviation/named constant) |
+| `VAL []BYTE s IS "hi":` | `var s []byte = []byte("hi")` (open array abbreviation) |
 | `INT y IS z:` | `y := z` (non-VAL abbreviation) |
 | `INITIAL INT x IS 42:` | `x := 42` (mutable variable with initial value) |
 | `#INCLUDE "file"` | Textual inclusion (preprocessor, pre-lexer) |
@@ -125,6 +129,7 @@ Six packages, one pipeline:
 | `MOSTNEG REAL32` / `MOSTPOS REAL32` | `-math.MaxFloat32` / `math.MaxFloat32` |
 | `MOSTNEG REAL64` / `MOSTPOS REAL64` | `-math.MaxFloat64` / `math.MaxFloat64` |
 | `[arr FROM n FOR m]` | `arr[n : n+m]` (array slice) |
+| `[arr FOR m]` | `arr[0 : m]` (shorthand slice, FROM 0 implied) |
 | `[arr FROM n FOR m] := src` | `copy(arr[n:n+m], src)` (slice assignment) |
 | Nested `PROC`/`FUNCTION` | `name := func(...) { ... }` (Go closure) |
 
@@ -159,8 +164,20 @@ Typical workflow for a new language construct:
 
 ## What's Implemented
 
-Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards, timer timeouts, and multi-statement bodies with scoped declarations), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, reference, CHAN, []CHAN, and open array `[]TYPE` params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`, call-site annotations `out!`/`in?` accepted), FUNCTION (IS and VALOF forms, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)` including indexed targets like `x[0], x[1] := x[1], x[0]`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ/PAR/IF (with optional STEP), arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator, array slices (`[arr FROM n FOR m]` with slice assignment), nested PROCs/FUNCTIONs (local definitions as Go closures), MOSTNEG/MOSTPOS (type min/max constants for INT, BYTE, REAL32, REAL64), INITIAL declarations (`INITIAL INT x IS 42:` — mutable variable with initial value), checked (modular) arithmetic (`PLUS`, `MINUS`, `TIMES` — wrapping operators).
+Preprocessor (`#IF`/`#ELSE`/`#ENDIF`/`#DEFINE`/`#INCLUDE` with search paths, include guards, include-once deduplication, `#COMMENT`/`#PRAGMA`/`#USE` ignored), module file generation from SConscript (`gen-module` subcommand), SEQ, PAR, IF, WHILE, CASE, ALT (with guards, timer timeouts, and multi-statement bodies with scoped declarations), SKIP, STOP, variable/array/channel/timer declarations, abbreviations (`VAL INT x IS 42:`, `INT y IS z:`, `VAL []BYTE s IS "hi":`), assignments (simple and indexed), channel send/receive, channel arrays (`[n]CHAN OF TYPE` with indexed send/receive and `[]CHAN OF TYPE` proc params), PROC (with VAL, RESULT, reference, CHAN, []CHAN, open array `[]TYPE`, fixed-size array `[n]TYPE`, and shared-type params), channel direction restrictions (`CHAN OF INT c?` → `<-chan int`, `CHAN OF INT c!` → `chan<- int`, call-site annotations `out!`/`in?` accepted), multi-line parameter lists (lexer suppresses INDENT/DEDENT/NEWLINE inside parens), FUNCTION (IS and VALOF forms with multi-statement bodies, including multi-result `INT, INT FUNCTION` with `RESULT a, b`), multi-assignment (`a, b := func(...)` including indexed targets like `x[0], x[1] := x[1], x[0]`), KRoC-style colon terminators on PROC/FUNCTION (optional), replicators on SEQ/PAR/IF (with optional STEP), arithmetic/comparison/logical/AFTER/bitwise operators, type conversions (`INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`, etc.), REAL32/REAL64 types, hex integer literals (`#FF`, `#80000000`), string literals, byte literals (`'A'`, `'*n'` with occam escape sequences), built-in print procedures, protocols (simple, sequential, and variant), record types (with field access via bracket syntax), SIZE operator, array slices (`[arr FROM n FOR m]` and shorthand `[arr FOR m]` with slice assignment), nested PROCs/FUNCTIONs (local definitions as Go closures), MOSTNEG/MOSTPOS (type min/max constants for INT, BYTE, REAL32, REAL64), INITIAL declarations (`INITIAL INT x IS 42:` — mutable variable with initial value), checked (modular) arithmetic (`PLUS`, `MINUS`, `TIMES` — wrapping operators).
+
+## Course Module Testing
+
+The KRoC course module (`kroc/modules/course/libsrc/course.module`) is a real-world integration test. A reduced version excluding `float_io.occ` is provided:
+
+```bash
+# Transpile course module (without float_io.occ)
+./occam2go -I kroc/modules/course/libsrc -D TARGET.BITS.PER.WORD=32 -o /tmp/course_out.go course_nofloat.module
+
+# Verify Go output compiles (will only fail with "no main" since it's a library)
+go vet /tmp/course_out.go
+```
 
 ## Not Yet Implemented
 
-PRI ALT/PRI PAR, PLACED PAR, PORT OF. See `TODO.md` for the full list with priorities.
+RETYPES (bit-level type reinterpretation), transputer intrinsics (LONGPROD, LONGDIV, LONGSUM, LONGDIFF, NORMALISE, SHIFTRIGHT, SHIFTLEFT), CAUSEERROR, PRI ALT/PRI PAR, PLACED PAR, PORT OF. These are needed to transpile `float_io.occ` (Phase 2). See `TODO.md` for the full list with priorities.

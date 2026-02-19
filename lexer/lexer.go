@@ -16,6 +16,9 @@ type Lexer struct {
 	indentStack  []int // stack of indentation levels
 	pendingTokens []Token // tokens to emit before reading more input
 	atLineStart  bool
+
+	// Parenthesis depth: suppress INDENT/DEDENT/NEWLINE inside (...)
+	parenDepth int
 }
 
 func New(input string) *Lexer {
@@ -62,7 +65,10 @@ func (l *Lexer) NextToken() Token {
 		indent := l.measureIndent()
 		currentIndent := l.indentStack[len(l.indentStack)-1]
 
-		if indent > currentIndent {
+		if l.parenDepth > 0 {
+			// Inside parentheses: suppress INDENT/DEDENT tokens
+			// (don't modify indentStack — resume normal tracking after close paren)
+		} else if indent > currentIndent {
 			l.indentStack = append(l.indentStack, indent)
 			return Token{Type: INDENT, Literal: "", Line: l.line, Column: 1}
 		} else if indent < currentIndent {
@@ -87,8 +93,12 @@ func (l *Lexer) NextToken() Token {
 
 	switch l.ch {
 	case '(':
+		l.parenDepth++
 		tok = l.newToken(LPAREN, l.ch)
 	case ')':
+		if l.parenDepth > 0 {
+			l.parenDepth--
+		}
 		tok = l.newToken(RPAREN, l.ch)
 	case '[':
 		tok = l.newToken(LBRACKET, l.ch)
@@ -193,7 +203,6 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = l.line
 		tok.Column = l.column
 	case '\n':
-		tok = Token{Type: NEWLINE, Literal: "\\n", Line: l.line, Column: l.column}
 		l.line++
 		l.column = 0
 		l.atLineStart = true
@@ -208,6 +217,11 @@ func (l *Lexer) NextToken() Token {
 				l.skipToEndOfLine()
 			}
 		}
+		if l.parenDepth > 0 {
+			// Inside parentheses: suppress NEWLINE, get next real token
+			return l.NextToken()
+		}
+		tok = Token{Type: NEWLINE, Literal: "\\n", Line: l.line, Column: l.column}
 		return tok
 	case 0:
 		// Emit any remaining DEDENTs before EOF
