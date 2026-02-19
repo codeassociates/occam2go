@@ -3,9 +3,9 @@
 ## Fully Implemented
 
 ### Core Constructs
-- **SEQ** — Sequential execution, with replicators (`SEQ i = 0 FOR n`)
+- **SEQ** — Sequential execution, with replicators (`SEQ i = 0 FOR n`) and optional STEP
 - **PAR** — Parallel execution via goroutines + sync.WaitGroup, with replicators
-- **IF** — Multi-branch conditionals, maps to if/else if chains
+- **IF** — Multi-branch conditionals, maps to if/else if chains, with replicators
 - **WHILE** — Loops, maps to Go `for` loops
 - **CASE** — Pattern matching with multiple cases and ELSE branch
 - **ALT** — Channel alternation, maps to Go `select`; supports boolean guards and timer timeouts
@@ -16,16 +16,23 @@
 - **INT, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (REAL/REAL64 map to float64, REAL32 maps to float32)
 - **Variable declarations** — `INT x, y, z:`
 - **Arrays** — `[n]TYPE arr:` with index expressions
-- **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`)
+- **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`); `CHAN BYTE` shorthand (without `OF`)
 - **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive and `[]CHAN OF TYPE` proc params
 - **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only)
 - **Timers** — `TIMER tim:` with reads and `AFTER` expressions
+- **Abbreviations** — `VAL INT x IS 1:`, `INT y IS z:` — named constants and aliases
+- **INITIAL declarations** — `INITIAL INT x IS 42:` — mutable variables with initial values
+- **Byte literals** — `'A'`, `'0'` with occam escape sequences (`*n`, `*c`, `*t`)
+- **Hex integer literals** — `#FF`, `#80000000`
 
 ### Procedures & Functions
-- **PROC** — Declaration with VAL, reference, and CHAN OF parameters
+- **PROC** — Declaration with VAL, reference, CHAN OF, and open array (`[]TYPE`) parameters
 - **PROC calls** — With automatic `&`/`*` for reference params, pass-through for channels
 - **FUNCTION (IS form)** — `INT FUNCTION square(VAL INT x) IS x * x`
 - **FUNCTION (VALOF form)** — Local declarations + VALOF body + RESULT
+- **Multi-result FUNCTIONs** — `INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`
+- **Nested PROCs/FUNCTIONs** — Local definitions inside a PROC body, compiled as Go closures
+- **KRoC-style colon terminators** — Optional `:` at end of PROC/FUNCTION body
 - **Built-in print** — `print.int`, `print.bool`, `print.string`, `print.newline`
 
 ### Expressions & Operators
@@ -38,6 +45,11 @@
 - **Array indexing** — `arr[i]`, `arr[expr]`
 - **String literals** — Double-quoted strings
 - **Type conversions** — `INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`
+- **Checked arithmetic** — `PLUS`, `MINUS`, `TIMES` — modular (wrapping) operators
+- **MOSTNEG/MOSTPOS** — Type min/max constants for INT, BYTE, REAL32, REAL64
+- **SIZE operator** — `SIZE arr`, `SIZE "str"` maps to `len()`
+- **Array slices** — `[arr FROM n FOR m]` with slice assignment
+- **Multi-assignment** — `a, b := f(...)` including indexed targets like `x[0], x[1] := x[1], x[0]`
 
 ### Protocols
 - **Simple** — `PROTOCOL SIG IS INT` (type alias)
@@ -60,29 +72,6 @@
 ---
 
 ## Not Yet Implemented
-
-### Required for course.module
-
-These features are needed to transpile the KRoC course module (`kroc/modules/course/libsrc/`), listed roughly in order of priority. Features used across many course module files are marked with frequency.
-
-| Feature | Notes | Used in |
-|---------|-------|---------|
-| ~~**Abbreviations**~~ | ~~`VAL INT x IS 1:`, `VAL BYTE ch IS 'A':` — named constants.~~ **DONE** | consts.inc, all .occ files |
-| ~~**`CHAN BYTE` shorthand**~~ | ~~`CHAN BYTE out!` without `OF`. KRoC allows omitting `OF` for channel types.~~ **DONE** | all .occ files |
-| ~~**Open array params**~~ | ~~`VAL []BYTE s`, `[]BYTE s` — unsized array/slice parameters for PROCs and FUNCTIONs. (`[]CHAN OF T` is already supported.)~~ **DONE** | utils.occ, string.occ, file_in.occ, stringbuf.occ |
-| ~~**BYTE literals**~~ | ~~`'A'`, `'0'`, `' '` — single-quoted character literals.~~ **DONE** | utils.occ, file_in.occ, string.occ |
-| ~~**Occam escape sequences**~~ | ~~`*n` (newline), `*c` (carriage return), `*t` (tab) — occam uses `*` not `\` for escapes in strings and byte literals.~~ **DONE** | utils.occ, file_in.occ |
-| ~~**PROC terminator `:`**~~ | ~~Standalone `:` at the end of a PROC/FUNCTION body (KRoC style).~~ **DONE** | all .occ files |
-| ~~**Nested PROCs/FUNCTIONs**~~ | ~~Local PROC/FUNCTION definitions inside a PROC body.~~ **DONE** | float_io.occ, stringbuf.occ |
-| ~~**Multi-result FUNCTIONs**~~ | ~~`INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`.~~ **DONE** | random.occ, utils.occ, string.occ, float_io.occ |
-| ~~**Replicated IF**~~ | ~~`IF i = 0 FOR n` — replicated conditional.~~ **DONE** | utils.occ, file_in.occ, string.occ, float_io.occ |
-| ~~**Hex integer literals**~~ | ~~`#FF`, `#80000000` — prefixed with `#`.~~ **DONE** | float_io.occ, stringbuf.occ |
-| ~~**Checked arithmetic**~~ | ~~`TIMES`, `PLUS`, `MINUS` — modular (wrapping) arithmetic operators.~~ **DONE** | demo_cycles.occ, random.occ, utils.occ |
-| ~~**`MOSTNEG INT`**~~ | ~~Most-negative integer constant (`MOSTNEG`/`MOSTPOS` for INT, BYTE, REAL32, REAL64).~~ **DONE** | utils.occ |
-| ~~**`INITIAL` declarations**~~ | ~~`INITIAL INT i IS 0:` — mutable variable with initial value.~~ **DONE** | stringbuf.occ |
-| ~~**Array slices**~~ | ~~`[a FROM n FOR m]` — sub-array references.~~ **DONE** | string.occ, stringbuf.occ, float_io.occ |
-| ~~**Replicator STEP**~~ | ~~`SEQ i = n FOR m STEP -1` — step value in replicators.~~ **DONE** | stringbuf.occ |
-| ~~**Multi-assignment**~~ | ~~`a, b := x, y` — parallel assignment to multiple variables (including indexed targets like `x[0], x[1] := x[1], x[0]`).~~ **DONE** | stringbuf.occ, utils.occ |
 
 ### Required for shared_screen module (extends course module)
 
