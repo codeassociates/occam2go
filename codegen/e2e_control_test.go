@@ -201,3 +201,84 @@ func TestE2E_CaseExpression(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_MultiStatementIfBody(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 5
+  IF
+    x > 0
+      INT y:
+      y := x + 10
+      print.int(y)
+    TRUE
+      SKIP
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiStatementCaseBody(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 2
+  CASE x
+    1
+      print.int(10)
+    2
+      INT y:
+      y := x * 100
+      print.int(y)
+    ELSE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "200\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiStatementWhileBody(t *testing.T) {
+	occam := `SEQ
+  INT x:
+  x := 0
+  WHILE x < 3
+    INT step:
+    step := 1
+    x := x + step
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "3\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ChannelDirAtCallSite(t *testing.T) {
+	occam := `PROC worker(CHAN OF INT in?, CHAN OF INT out!)
+  INT x:
+  in ? x
+  out ! x + 1
+:
+SEQ
+  CHAN OF INT a:
+  CHAN OF INT b:
+  PAR
+    worker(a?, b!)
+    SEQ
+      a ! 10
+      INT result:
+      b ? result
+      print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "11\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

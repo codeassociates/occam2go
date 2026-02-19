@@ -5,10 +5,10 @@
 ### Core Constructs
 - **SEQ** — Sequential execution, with replicators (`SEQ i = 0 FOR n`) and optional STEP
 - **PAR** — Parallel execution via goroutines + sync.WaitGroup, with replicators
-- **IF** — Multi-branch conditionals, maps to if/else if chains, with replicators
-- **WHILE** — Loops, maps to Go `for` loops
-- **CASE** — Pattern matching with multiple cases and ELSE branch
-- **ALT** — Channel alternation, maps to Go `select`; supports boolean guards and timer timeouts
+- **IF** — Multi-branch conditionals, maps to if/else if chains, with replicators; supports multi-statement bodies (declarations scoped before process)
+- **WHILE** — Loops, maps to Go `for` loops; supports multi-statement bodies
+- **CASE** — Pattern matching with multiple cases and ELSE branch; supports multi-statement bodies
+- **ALT** — Channel alternation, maps to Go `select`; supports boolean guards, timer timeouts, and multi-statement bodies
 - **SKIP** — No-op process
 - **STOP** — Error + deadlock
 
@@ -18,7 +18,7 @@
 - **Arrays** — `[n]TYPE arr:` with index expressions
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`); `CHAN BYTE` shorthand (without `OF`)
 - **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive and `[]CHAN OF TYPE` proc params
-- **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only)
+- **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only); direction annotations at call sites (`out!`, `in?`) accepted and ignored
 - **Timers** — `TIMER tim:` with reads and `AFTER` expressions
 - **Abbreviations** — `VAL INT x IS 1:`, `INT y IS z:` — named constants and aliases
 - **INITIAL declarations** — `INITIAL INT x IS 42:` — mutable variables with initial values

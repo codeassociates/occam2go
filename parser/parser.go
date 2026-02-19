@@ -1635,13 +1635,7 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 	p.nextToken() // consume INDENT
 	p.nextToken() // move into body
 
-	// Parse the body (first statement)
-	altCase.Body = p.parseStatement()
-
-	// Skip to end of body block
-	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-		p.nextToken()
-	}
+	altCase.Body = p.parseBodyStatements()
 
 	return altCase
 }
@@ -1693,6 +1687,64 @@ func (p *Parser) parseBlockStatements() []ast.Statement {
 		// Only advance if we're still on the last token of the statement.
 		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
 			p.nextToken()
+		}
+	}
+
+	return statements
+}
+
+// parseBodyStatements parses multiple statements inside a branch body
+// (IF choice, CASE choice, ALT case, WHILE). Called after the caller has
+// consumed the INDENT token and advanced into the body.
+// Returns all statements found at this indentation level.
+func (p *Parser) parseBodyStatements() []ast.Statement {
+	var statements []ast.Statement
+	startLevel := p.indentLevel
+
+	for !p.curTokenIs(lexer.EOF) {
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Handle DEDENT tokens
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				return statements
+			}
+			p.nextToken()
+		}
+
+		// Skip any more newlines after DEDENT
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
+		if p.curTokenIs(lexer.EOF) {
+			break
+		}
+
+		if p.indentLevel < startLevel {
+			break
+		}
+
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
+		stmt := p.parseStatement()
+		if stmt != nil {
+			statements = append(statements, stmt)
+		}
+
+		// Advance past the last token of the statement if needed
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			break
 		}
 	}
 
@@ -1910,11 +1962,19 @@ func (p *Parser) parseProcCall() *ast.ProcCall {
 
 	p.nextToken() // move to first arg
 	call.Args = append(call.Args, p.parseExpression(LOWEST))
+	// Consume optional channel direction annotation at call site (e.g., out!)
+	if p.peekTokenIs(lexer.SEND) || p.peekTokenIs(lexer.RECEIVE) {
+		p.nextToken()
+	}
 
 	for p.peekTokenIs(lexer.COMMA) {
 		p.nextToken() // consume comma
 		p.nextToken() // move to next arg
 		call.Args = append(call.Args, p.parseExpression(LOWEST))
+		// Consume optional channel direction annotation at call site
+		if p.peekTokenIs(lexer.SEND) || p.peekTokenIs(lexer.RECEIVE) {
+			p.nextToken()
+		}
 	}
 
 	if !p.expectPeek(lexer.RPAREN) {
@@ -2148,12 +2208,7 @@ func (p *Parser) parseWhileLoop() *ast.WhileLoop {
 	p.nextToken() // consume INDENT
 	p.nextToken() // move to first statement
 
-	loop.Body = p.parseStatement()
-
-	// Consume until DEDENT
-	for !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-		p.nextToken()
-	}
+	loop.Body = p.parseBodyStatements()
 
 	return loop
 }
@@ -2225,12 +2280,7 @@ func (p *Parser) parseIfStatement() *ast.IfStatement {
 		if p.peekTokenIs(lexer.INDENT) {
 			p.nextToken() // consume INDENT
 			p.nextToken() // move to body
-			choice.Body = p.parseStatement()
-
-			// Advance past the last token of the statement if needed
-			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-				p.nextToken()
-			}
+			choice.Body = p.parseBodyStatements()
 		}
 
 		stmt.Choices = append(stmt.Choices, choice)
@@ -2305,12 +2355,7 @@ func (p *Parser) parseCaseStatement() *ast.CaseStatement {
 		if p.peekTokenIs(lexer.INDENT) {
 			p.nextToken() // consume INDENT
 			p.nextToken() // move to body
-			choice.Body = p.parseStatement()
-
-			// Advance past the last token of the statement if needed
-			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-				p.nextToken()
-			}
+			choice.Body = p.parseBodyStatements()
 		}
 
 		stmt.Choices = append(stmt.Choices, choice)
