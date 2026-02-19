@@ -259,6 +259,99 @@ func TestE2E_MultiStatementWhileBody(t *testing.T) {
 	}
 }
 
+func TestE2E_NestedReplicatedIfWithDefault(t *testing.T) {
+	// Replicated IF as a choice within outer IF, with TRUE default
+	occam := `SEQ
+  [5]INT arr:
+  INT result:
+  SEQ i = 0 FOR 5
+    arr[i] := i * 10
+  IF
+    IF i = 0 FOR 5
+      arr[i] > 25
+        result := arr[i]
+    TRUE
+      result := -1
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_NestedReplicatedIfNoMatch(t *testing.T) {
+	// Replicated IF where no choice matches, falls through to TRUE
+	occam := `SEQ
+  [3]INT arr:
+  INT result:
+  SEQ i = 0 FOR 3
+    arr[i] := i
+  IF
+    IF i = 0 FOR 3
+      arr[i] > 100
+        result := arr[i]
+    TRUE
+      result := -1
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_NestedReplicatedIfWithPrecedingChoice(t *testing.T) {
+	// Normal choice before replicated IF, then default
+	occam := `SEQ
+  [3]INT arr:
+  INT result:
+  SEQ i = 0 FOR 3
+    arr[i] := i
+  INT x:
+  x := 99
+  IF
+    x > 100
+      result := x
+    IF i = 0 FOR 3
+      arr[i] = 2
+        result := arr[i]
+    TRUE
+      result := -1
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_NestedNonReplicatedIf(t *testing.T) {
+	// Non-replicated nested IF (choices inlined into parent)
+	occam := `SEQ
+  INT x:
+  INT result:
+  x := 5
+  IF
+    IF
+      x > 10
+        result := 1
+      x > 3
+        result := 2
+    TRUE
+      result := 0
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ChannelDirAtCallSite(t *testing.T) {
 	occam := `PROC worker(CHAN OF INT in?, CHAN OF INT out!)
   INT x:

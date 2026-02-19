@@ -1238,12 +1238,17 @@ func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.Var
 			break
 		}
 
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
 		// Parse a variant case: tag [; var]* \n INDENT body
 		vc := ast.VariantCase{}
 
 		if !p.curTokenIs(lexer.IDENT) {
 			p.addError(fmt.Sprintf("expected variant tag name, got %s", p.curToken.Type))
-			return stmt
+			p.nextToken() // skip unrecognized token to avoid infinite loop
+			continue
 		}
 		vc.Tag = p.curToken.Literal
 
@@ -1273,6 +1278,14 @@ func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.Var
 		}
 
 		stmt.Cases = append(stmt.Cases, vc)
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			p.nextToken() // force progress
+			if p.curToken == prevToken {
+				break
+			}
+		}
 	}
 
 	return stmt
@@ -1323,11 +1336,16 @@ func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndex ast.E
 			break
 		}
 
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
 		vc := ast.VariantCase{}
 
 		if !p.curTokenIs(lexer.IDENT) {
 			p.addError(fmt.Sprintf("expected variant tag name, got %s", p.curToken.Type))
-			return stmt
+			p.nextToken() // skip unrecognized token to avoid infinite loop
+			continue
 		}
 		vc.Tag = p.curToken.Literal
 
@@ -1354,6 +1372,14 @@ func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndex ast.E
 		}
 
 		stmt.Cases = append(stmt.Cases, vc)
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			p.nextToken() // force progress
+			if p.curToken == prevToken {
+				break
+			}
+		}
 	}
 
 	return stmt
@@ -1517,10 +1543,19 @@ func (p *Parser) parseAltCases() []ast.AltCase {
 			break
 		}
 
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
 		// Parse an ALT case: [guard &] channel ? var
 		altCase := p.parseAltCase()
 		if altCase != nil {
 			cases = append(cases, *altCase)
+		}
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			break
 		}
 	}
 
@@ -2269,21 +2304,37 @@ func (p *Parser) parseIfStatement() *ast.IfStatement {
 			break
 		}
 
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
 		choice := ast.IfChoice{}
-		choice.Condition = p.parseExpression(LOWEST)
 
-		// Skip newlines and expect INDENT for body
-		for p.peekTokenIs(lexer.NEWLINE) {
-			p.nextToken()
-		}
+		// Nested IF (plain or replicated) used as a choice within this IF
+		if p.curTokenIs(lexer.IF) {
+			nestedIf := p.parseIfStatement()
+			choice.NestedIf = nestedIf
+		} else {
+			choice.Condition = p.parseExpression(LOWEST)
 
-		if p.peekTokenIs(lexer.INDENT) {
-			p.nextToken() // consume INDENT
-			p.nextToken() // move to body
-			choice.Body = p.parseBodyStatements()
+			// Skip newlines and expect INDENT for body
+			for p.peekTokenIs(lexer.NEWLINE) {
+				p.nextToken()
+			}
+
+			if p.peekTokenIs(lexer.INDENT) {
+				p.nextToken() // consume INDENT
+				p.nextToken() // move to body
+				choice.Body = p.parseBodyStatements()
+			}
 		}
 
 		stmt.Choices = append(stmt.Choices, choice)
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			break
+		}
 	}
 
 	return stmt
@@ -2338,6 +2389,10 @@ func (p *Parser) parseCaseStatement() *ast.CaseStatement {
 			break
 		}
 
+		// Safety guard: record position before parsing to detect no-progress
+		prevToken := p.curToken
+		prevPeek := p.peekToken
+
 		choice := ast.CaseChoice{}
 
 		if p.curTokenIs(lexer.ELSE) {
@@ -2359,6 +2414,11 @@ func (p *Parser) parseCaseStatement() *ast.CaseStatement {
 		}
 
 		stmt.Choices = append(stmt.Choices, choice)
+
+		// No-progress guard: if we haven't moved, break to prevent infinite loop
+		if p.curToken == prevToken && p.peekToken == prevPeek {
+			break
+		}
 	}
 
 	return stmt

@@ -221,6 +221,11 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				if g.containsPar(choice.NestedIf) {
+					return true
+				}
+			}
 			for _, inner := range choice.Body {
 				if g.containsPar(inner) {
 					return true
@@ -289,6 +294,11 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				if g.containsPrint(choice.NestedIf) {
+					return true
+				}
+			}
 			for _, inner := range choice.Body {
 				if g.containsPrint(inner) {
 					return true
@@ -360,6 +370,11 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				if g.containsTimer(choice.NestedIf) {
+					return true
+				}
+			}
 			for _, inner := range choice.Body {
 				if g.containsTimer(inner) {
 					return true
@@ -428,6 +443,11 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				if g.containsStop(choice.NestedIf) {
+					return true
+				}
+			}
 			for _, inner := range choice.Body {
 				if g.containsStop(inner) {
 					return true
@@ -504,6 +524,11 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				if g.containsMostExpr(choice.NestedIf) {
+					return true
+				}
+			}
 			if g.exprNeedsMath(choice.Condition) {
 				return true
 			}
@@ -943,6 +968,9 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				g.collectChanProtocols(choice.NestedIf)
+			}
 			for _, inner := range choice.Body {
 				g.collectChanProtocols(inner)
 			}
@@ -999,6 +1027,9 @@ func (g *Generator) collectRecordVars(stmt ast.Statement) {
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				g.collectRecordVars(choice.NestedIf)
+			}
 			for _, inner := range choice.Body {
 				g.collectRecordVars(inner)
 			}
@@ -1551,58 +1582,104 @@ func (g *Generator) generateWhileLoop(loop *ast.WhileLoop) {
 func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 	if stmt.Replicator != nil {
 		// Replicated IF: IF i = start FOR count → for loop with break on first match
-		v := stmt.Replicator.Variable
-		if stmt.Replicator.Step != nil {
-			counter := "_repl_" + v
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
-			g.generateExpression(stmt.Replicator.Count)
-			g.write(fmt.Sprintf("; %s++ {\n", counter))
-			g.indent++
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("%s := ", v))
-			g.generateExpression(stmt.Replicator.Start)
-			g.write(fmt.Sprintf(" + %s * ", counter))
-			g.generateExpression(stmt.Replicator.Step)
-			g.write("\n")
+		g.generateReplicatedIfLoop(stmt, false)
+	} else {
+		// Flatten non-replicated nested IFs into the parent choice list
+		choices := g.flattenIfChoices(stmt.Choices)
+		g.generateIfChoiceChain(choices, true)
+	}
+}
+
+// flattenIfChoices inlines choices from non-replicated nested IFs into a flat list.
+// Replicated nested IFs are preserved as-is (they need special loop codegen).
+func (g *Generator) flattenIfChoices(choices []ast.IfChoice) []ast.IfChoice {
+	var flat []ast.IfChoice
+	for _, c := range choices {
+		if c.NestedIf != nil && c.NestedIf.Replicator == nil {
+			// Non-replicated nested IF: inline its choices recursively
+			flat = append(flat, g.flattenIfChoices(c.NestedIf.Choices)...)
 		} else {
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("for %s := ", v))
-			g.generateExpression(stmt.Replicator.Start)
-			g.write(fmt.Sprintf("; %s < ", v))
-			g.generateExpression(stmt.Replicator.Start)
-			g.write(" + ")
-			g.generateExpression(stmt.Replicator.Count)
-			g.write(fmt.Sprintf("; %s++ {\n", v))
-			g.indent++
+			flat = append(flat, c)
 		}
+	}
+	return flat
+}
 
-		for i, choice := range stmt.Choices {
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			if i == 0 {
-				g.write("if ")
-			} else {
-				g.write("} else if ")
-			}
-			g.generateExpression(choice.Condition)
-			g.write(" {\n")
-			g.indent++
+// generateReplicatedIfLoop emits a for loop that breaks on first matching choice.
+// When withinFlag is true, it sets _ifmatched = true before breaking.
+func (g *Generator) generateReplicatedIfLoop(stmt *ast.IfStatement, withinFlag bool) {
+	repl := stmt.Replicator
+	v := repl.Variable
+	if repl.Step != nil {
+		counter := "_repl_" + v
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
+		g.generateExpression(repl.Count)
+		g.write(fmt.Sprintf("; %s++ {\n", counter))
+		g.indent++
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s := ", v))
+		g.generateExpression(repl.Start)
+		g.write(fmt.Sprintf(" + %s * ", counter))
+		g.generateExpression(repl.Step)
+		g.write("\n")
+	} else {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := ", v))
+		g.generateExpression(repl.Start)
+		g.write(fmt.Sprintf("; %s < ", v))
+		g.generateExpression(repl.Start)
+		g.write(" + ")
+		g.generateExpression(repl.Count)
+		g.write(fmt.Sprintf("; %s++ {\n", v))
+		g.indent++
+	}
 
-			for _, s := range choice.Body {
-				g.generateStatement(s)
-			}
-			g.writeLine("break")
-
-			g.indent--
+	for i, choice := range stmt.Choices {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		if i == 0 {
+			g.write("if ")
+		} else {
+			g.write("} else if ")
 		}
-		g.writeLine("}")
+		g.generateExpression(choice.Condition)
+		g.write(" {\n")
+		g.indent++
+
+		for _, s := range choice.Body {
+			g.generateStatement(s)
+		}
+		if withinFlag {
+			g.writeLine("_ifmatched = true")
+		}
+		g.writeLine("break")
 
 		g.indent--
-		g.writeLine("}")
-	} else {
-		for i, choice := range stmt.Choices {
+	}
+	g.writeLine("}")
+
+	g.indent--
+	g.writeLine("}")
+}
+
+// generateIfChoiceChain emits a chain of if/else-if for the given choices.
+// When a replicated nested IF is encountered, it splits the chain and uses
+// a _ifmatched flag to determine whether remaining choices should be tried.
+func (g *Generator) generateIfChoiceChain(choices []ast.IfChoice, isFirst bool) {
+	// Find first replicated nested IF
+	replIdx := -1
+	for i, c := range choices {
+		if c.NestedIf != nil && c.NestedIf.Replicator != nil {
+			replIdx = i
+			break
+		}
+	}
+
+	if replIdx == -1 {
+		// No replicated nested IFs — simple if/else-if chain
+		for i, choice := range choices {
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			if i == 0 {
+			if i == 0 && isFirst {
 				g.write("if ")
 			} else {
 				g.write("} else if ")
@@ -1617,6 +1694,59 @@ func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 
 			g.indent--
 		}
+		if len(choices) > 0 {
+			g.writeLine("}")
+		}
+		return
+	}
+
+	// Split at the replicated nested IF
+	before := choices[:replIdx]
+	replChoice := choices[replIdx]
+	after := choices[replIdx+1:]
+
+	// Emit choices before the replicated IF as a normal if-else chain
+	if len(before) > 0 {
+		for i, choice := range before {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			if i == 0 && isFirst {
+				g.write("if ")
+			} else {
+				g.write("} else if ")
+			}
+			g.generateExpression(choice.Condition)
+			g.write(" {\n")
+			g.indent++
+			for _, s := range choice.Body {
+				g.generateStatement(s)
+			}
+			g.indent--
+		}
+		// Open else block for the replicated IF + remaining choices
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write("} else {\n")
+		g.indent++
+	}
+
+	// Emit the replicated nested IF with a flag
+	needFlag := len(after) > 0
+	if needFlag {
+		g.writeLine("_ifmatched := false")
+	}
+	g.generateReplicatedIfLoop(replChoice.NestedIf, needFlag)
+
+	// Emit remaining choices inside if !_ifmatched (recursive for multiple)
+	if len(after) > 0 {
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write("if !_ifmatched {\n")
+		g.indent++
+		g.generateIfChoiceChain(after, true) // recursive for remaining
+		g.indent--
+		g.writeLine("}")
+	}
+
+	if len(before) > 0 {
+		g.indent--
 		g.writeLine("}")
 	}
 }

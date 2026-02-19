@@ -205,6 +205,7 @@ type IfStatement struct {
 type IfChoice struct {
 	Condition Expression
 	Body      []Statement
+	NestedIf  *IfStatement // non-nil when this choice is a nested/replicated IF
 }
 
 func (i *IfStatement) statementNode()       {}
