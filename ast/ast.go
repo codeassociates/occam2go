@@ -189,7 +189,7 @@ func (f *FuncCall) TokenLiteral() string { return f.Token.Literal }
 type WhileLoop struct {
 	Token     lexer.Token // the WHILE token
 	Condition Expression
-	Body      Statement
+	Body      []Statement
 }
 
 func (w *WhileLoop) statementNode()       {}
@@ -204,7 +204,7 @@ type IfStatement struct {
 
 type IfChoice struct {
 	Condition Expression
-	Body      Statement
+	Body      []Statement
 }
 
 func (i *IfStatement) statementNode()       {}
@@ -220,7 +220,7 @@ type CaseStatement struct {
 type CaseChoice struct {
 	Values []Expression // nil/empty for ELSE
 	IsElse bool
-	Body   Statement
+	Body   []Statement
 }
 
 func (c *CaseStatement) statementNode()       {}
@@ -390,14 +390,14 @@ func (a *AltBlock) TokenLiteral() string { return a.Token.Literal }
 
 // AltCase represents a single case in an ALT block
 type AltCase struct {
-	Guard        Expression // optional guard condition (nil if no guard)
-	Channel      string     // channel name
-	ChannelIndex Expression // non-nil for cs[i] ? x in ALT
-	Variable     string     // variable to receive into
-	Body         Statement  // the body to execute
-	IsTimer      bool       // true if this is a timer AFTER case
-	Timer        string     // timer name (when IsTimer)
-	Deadline     Expression // AFTER deadline expression (when IsTimer)
+	Guard        Expression  // optional guard condition (nil if no guard)
+	Channel      string      // channel name
+	ChannelIndex Expression  // non-nil for cs[i] ? x in ALT
+	Variable     string      // variable to receive into
+	Body         []Statement // the body to execute
+	IsTimer      bool        // true if this is a timer AFTER case
+	Timer        string      // timer name (when IsTimer)
+	Deadline     Expression  // AFTER deadline expression (when IsTimer)
 }
 
 // TimerDecl represents a timer declaration: TIMER tim:

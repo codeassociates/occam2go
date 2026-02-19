@@ -371,7 +371,7 @@ func TestWhileLoop(t *testing.T) {
 		t.Error("expected condition")
 	}
 
-	if loop.Body == nil {
+	if len(loop.Body) == 0 {
 		t.Error("expected body")
 	}
 }
@@ -405,7 +405,7 @@ func TestIfStatement(t *testing.T) {
 		t.Error("expected condition on first choice")
 	}
 
-	if ifStmt.Choices[0].Body == nil {
+	if len(ifStmt.Choices[0].Body) == 0 {
 		t.Error("expected body on first choice")
 	}
 
@@ -413,7 +413,7 @@ func TestIfStatement(t *testing.T) {
 		t.Error("expected condition on second choice")
 	}
 
-	if ifStmt.Choices[1].Body == nil {
+	if len(ifStmt.Choices[1].Body) == 0 {
 		t.Error("expected body on second choice")
 	}
 }
@@ -577,7 +577,7 @@ func TestReplicatedIf(t *testing.T) {
 		t.Error("expected condition on choice")
 	}
 
-	if ifStmt.Choices[0].Body == nil {
+	if len(ifStmt.Choices[0].Body) == 0 {
 		t.Error("expected body on choice")
 	}
 }
@@ -1017,7 +1017,7 @@ func TestCaseStatement(t *testing.T) {
 	if len(caseStmt.Choices[0].Values) != 1 {
 		t.Fatalf("expected 1 value in first choice, got %d", len(caseStmt.Choices[0].Values))
 	}
-	if caseStmt.Choices[0].Body == nil {
+	if len(caseStmt.Choices[0].Body) == 0 {
 		t.Error("expected body on first choice")
 	}
 
@@ -1025,7 +1025,7 @@ func TestCaseStatement(t *testing.T) {
 	if caseStmt.Choices[1].IsElse {
 		t.Error("second choice should not be ELSE")
 	}
-	if caseStmt.Choices[1].Body == nil {
+	if len(caseStmt.Choices[1].Body) == 0 {
 		t.Error("expected body on second choice")
 	}
 
@@ -1033,7 +1033,7 @@ func TestCaseStatement(t *testing.T) {
 	if !caseStmt.Choices[2].IsElse {
 		t.Error("third choice should be ELSE")
 	}
-	if caseStmt.Choices[2].Body == nil {
+	if len(caseStmt.Choices[2].Body) == 0 {
 		t.Error("expected body on ELSE choice")
 	}
 }
@@ -2779,5 +2779,97 @@ func TestCheckedAndSymbolMixed(t *testing.T) {
 
 	if binExpr.Operator != "+" {
 		t.Errorf("expected top-level operator +, got %s", binExpr.Operator)
+	}
+}
+
+func TestMultiStatementIfBody(t *testing.T) {
+	input := `IF
+  x > 0
+    INT y:
+    y := 42
+    print.int(y)
+  TRUE
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	ifStmt, ok := program.Statements[0].(*ast.IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement, got %T", program.Statements[0])
+	}
+
+	if len(ifStmt.Choices) != 2 {
+		t.Fatalf("expected 2 choices, got %d", len(ifStmt.Choices))
+	}
+
+	// First choice should have 3 body statements: VarDecl, Assignment, ProcCall
+	if len(ifStmt.Choices[0].Body) != 3 {
+		t.Fatalf("expected 3 body statements in first choice, got %d", len(ifStmt.Choices[0].Body))
+	}
+	if _, ok := ifStmt.Choices[0].Body[0].(*ast.VarDecl); !ok {
+		t.Errorf("expected VarDecl as first body stmt, got %T", ifStmt.Choices[0].Body[0])
+	}
+	if _, ok := ifStmt.Choices[0].Body[1].(*ast.Assignment); !ok {
+		t.Errorf("expected Assignment as second body stmt, got %T", ifStmt.Choices[0].Body[1])
+	}
+	if _, ok := ifStmt.Choices[0].Body[2].(*ast.ProcCall); !ok {
+		t.Errorf("expected ProcCall as third body stmt, got %T", ifStmt.Choices[0].Body[2])
+	}
+
+	// Second choice should have 1 body statement: Skip
+	if len(ifStmt.Choices[1].Body) != 1 {
+		t.Fatalf("expected 1 body statement in second choice, got %d", len(ifStmt.Choices[1].Body))
+	}
+	if _, ok := ifStmt.Choices[1].Body[0].(*ast.Skip); !ok {
+		t.Errorf("expected Skip, got %T", ifStmt.Choices[1].Body[0])
+	}
+}
+
+func TestChannelDirAtCallSite(t *testing.T) {
+	input := `foo(out!, in?)
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	call, ok := program.Statements[0].(*ast.ProcCall)
+	if !ok {
+		t.Fatalf("expected ProcCall, got %T", program.Statements[0])
+	}
+
+	if call.Name != "foo" {
+		t.Errorf("expected proc name 'foo', got %q", call.Name)
+	}
+
+	if len(call.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(call.Args))
+	}
+
+	arg0, ok := call.Args[0].(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for arg 0, got %T", call.Args[0])
+	}
+	if arg0.Value != "out" {
+		t.Errorf("expected arg 0 = 'out', got %q", arg0.Value)
+	}
+
+	arg1, ok := call.Args[1].(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for arg 1, got %T", call.Args[1])
+	}
+	if arg1.Value != "in" {
+		t.Errorf("expected arg 1 = 'in', got %q", arg1.Value)
 	}
 }

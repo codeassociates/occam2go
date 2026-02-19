@@ -195,8 +195,10 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsPar(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsPar(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.ProcDecl:
@@ -212,19 +214,25 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil && g.containsPar(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsPar(inner) {
+				return true
+			}
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsPar(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsPar(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsPar(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsPar(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.VariantReceive:
@@ -255,8 +263,10 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsPrint(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsPrint(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.ProcDecl:
@@ -272,19 +282,25 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil && g.containsPrint(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsPrint(inner) {
+				return true
+			}
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsPrint(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsPrint(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsPrint(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsPrint(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.VariantReceive:
@@ -306,8 +322,10 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 			if c.IsTimer {
 				return true
 			}
-			if c.Body != nil && g.containsTimer(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsTimer(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.SeqBlock:
@@ -335,19 +353,25 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil && g.containsTimer(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsTimer(inner) {
+				return true
+			}
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsTimer(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsTimer(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsTimer(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsTimer(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.VariantReceive:
@@ -378,8 +402,10 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsStop(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsStop(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.ProcDecl:
@@ -395,19 +421,25 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 			}
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil && g.containsStop(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsStop(inner) {
+				return true
+			}
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsStop(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsStop(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil && g.containsStop(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsStop(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.VariantReceive:
@@ -465,16 +497,20 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 		if g.exprNeedsMath(s.Condition) {
 			return true
 		}
-		if s.Body != nil && g.containsMostExpr(s.Body) {
-			return true
+		for _, inner := range s.Body {
+			if g.containsMostExpr(inner) {
+				return true
+			}
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
 			if g.exprNeedsMath(choice.Condition) {
 				return true
 			}
-			if choice.Body != nil && g.containsMostExpr(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsMostExpr(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.CaseStatement:
@@ -487,8 +523,10 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 					return true
 				}
 			}
-			if choice.Body != nil && g.containsMostExpr(choice.Body) {
-				return true
+			for _, inner := range choice.Body {
+				if g.containsMostExpr(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.Send:
@@ -508,8 +546,10 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsMostExpr(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsMostExpr(inner) {
+					return true
+				}
 			}
 		}
 	case *ast.VariantReceive:
@@ -898,25 +938,25 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 			g.collectChanProtocols(inner)
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil {
-			g.collectChanProtocols(s.Body)
+		for _, inner := range s.Body {
+			g.collectChanProtocols(inner)
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil {
-				g.collectChanProtocols(choice.Body)
+			for _, inner := range choice.Body {
+				g.collectChanProtocols(inner)
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil {
-				g.collectChanProtocols(choice.Body)
+			for _, inner := range choice.Body {
+				g.collectChanProtocols(inner)
 			}
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil {
-				g.collectChanProtocols(c.Body)
+			for _, inner := range c.Body {
+				g.collectChanProtocols(inner)
 			}
 		}
 	}
@@ -954,25 +994,25 @@ func (g *Generator) collectRecordVars(stmt ast.Statement) {
 			g.collectRecordVars(inner)
 		}
 	case *ast.WhileLoop:
-		if s.Body != nil {
-			g.collectRecordVars(s.Body)
+		for _, inner := range s.Body {
+			g.collectRecordVars(inner)
 		}
 	case *ast.IfStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil {
-				g.collectRecordVars(choice.Body)
+			for _, inner := range choice.Body {
+				g.collectRecordVars(inner)
 			}
 		}
 	case *ast.CaseStatement:
 		for _, choice := range s.Choices {
-			if choice.Body != nil {
-				g.collectRecordVars(choice.Body)
+			for _, inner := range choice.Body {
+				g.collectRecordVars(inner)
 			}
 		}
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
-			if c.Body != nil {
-				g.collectRecordVars(c.Body)
+			for _, inner := range c.Body {
+				g.collectRecordVars(inner)
 			}
 		}
 	}
@@ -1249,8 +1289,8 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.write(fmt.Sprintf("case %s = <-%s:\n", c.Variable, c.Channel))
 		}
 		g.indent++
-		if c.Body != nil {
-			g.generateStatement(c.Body)
+		for _, s := range c.Body {
+			g.generateStatement(s)
 		}
 		g.indent--
 	}
@@ -1500,8 +1540,8 @@ func (g *Generator) generateWhileLoop(loop *ast.WhileLoop) {
 	g.write(" {\n")
 	g.indent++
 
-	if loop.Body != nil {
-		g.generateStatement(loop.Body)
+	for _, s := range loop.Body {
+		g.generateStatement(s)
 	}
 
 	g.indent--
@@ -1548,8 +1588,8 @@ func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 			g.write(" {\n")
 			g.indent++
 
-			if choice.Body != nil {
-				g.generateStatement(choice.Body)
+			for _, s := range choice.Body {
+				g.generateStatement(s)
 			}
 			g.writeLine("break")
 
@@ -1571,8 +1611,8 @@ func (g *Generator) generateIfStatement(stmt *ast.IfStatement) {
 			g.write(" {\n")
 			g.indent++
 
-			if choice.Body != nil {
-				g.generateStatement(choice.Body)
+			for _, s := range choice.Body {
+				g.generateStatement(s)
 			}
 
 			g.indent--
@@ -1602,8 +1642,8 @@ func (g *Generator) generateCaseStatement(stmt *ast.CaseStatement) {
 			g.write(":\n")
 		}
 		g.indent++
-		if choice.Body != nil {
-			g.generateStatement(choice.Body)
+		for _, s := range choice.Body {
+			g.generateStatement(s)
 		}
 		g.indent--
 	}
