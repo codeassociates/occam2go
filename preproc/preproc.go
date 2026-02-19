@@ -36,6 +36,7 @@ type Preprocessor struct {
 	includePaths []string
 	errors       []string
 	processing   map[string]bool // absolute paths currently being processed (circular include detection)
+	included     map[string]bool // absolute paths already included (prevent duplicate inclusion)
 }
 
 // New creates a new Preprocessor with the given options.
@@ -43,6 +44,7 @@ func New(opts ...Option) *Preprocessor {
 	pp := &Preprocessor{
 		defines:    map[string]string{},
 		processing: map[string]bool{},
+		included:   map[string]bool{},
 	}
 	// Predefined symbols
 	pp.defines["TARGET.BITS.PER.WORD"] = "64"
@@ -217,6 +219,15 @@ func (pp *Preprocessor) resolveAndInclude(rest string, baseDir string) (string, 
 	resolved := pp.resolveIncludePath(filename, baseDir)
 	if resolved == "" {
 		return "", fmt.Errorf("cannot find included file %q", filename)
+	}
+
+	// Skip files that have already been included (prevent duplicate definitions)
+	absPath, err := filepath.Abs(resolved)
+	if err == nil && pp.included[absPath] {
+		return "", nil
+	}
+	if err == nil {
+		pp.included[absPath] = true
 	}
 
 	return pp.ProcessFile(resolved)

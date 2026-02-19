@@ -313,15 +313,23 @@ func (p *Parser) parseVarDeclOrAbbreviation() ast.Statement {
 }
 
 // parseAbbreviation parses a VAL abbreviation: VAL INT x IS expr:
+// Also handles VAL []BYTE x IS "string": (open array abbreviation)
 // Current token is VAL.
 func (p *Parser) parseAbbreviation() *ast.Abbreviation {
 	token := p.curToken // VAL token
 
-	// Expect a type keyword
 	p.nextToken()
-	if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-		!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
-		!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
+
+	// Check for []TYPE (open array abbreviation)
+	isOpenArray := false
+	if p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
+		isOpenArray = true
+		p.nextToken() // consume ]
+		p.nextToken() // move to type
+	}
+
+	// Expect a type keyword
+	if !isTypeToken(p.curToken.Type) {
 		p.addError(fmt.Sprintf("expected type after VAL, got %s", p.curToken.Type))
 		return nil
 	}
@@ -348,11 +356,12 @@ func (p *Parser) parseAbbreviation() *ast.Abbreviation {
 	}
 
 	return &ast.Abbreviation{
-		Token: token,
-		IsVal: true,
-		Type:  typeName,
-		Name:  name,
-		Value: value,
+		Token:       token,
+		IsVal:       true,
+		IsOpenArray: isOpenArray,
+		Type:        typeName,
+		Name:        name,
+		Value:       value,
 	}
 }
 
@@ -467,7 +476,8 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 	size := p.parseExpression(LOWEST)
 
 	// Check if this is a slice assignment: [arr FROM start FOR length] := value
-	if p.peekTokenIs(lexer.FROM) {
+	// Also handles [arr FOR length] shorthand (FROM 0)
+	if p.peekTokenIs(lexer.FROM) || p.peekTokenIs(lexer.FOR) {
 		return p.parseSliceAssignment(lbracketToken, size)
 	}
 
@@ -559,12 +569,19 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 }
 
 // parseSliceAssignment parses [arr FROM start FOR length] := value
-// Called from parseArrayDecl when FROM is detected after the array expression.
+// Also handles [arr FOR length] shorthand (start defaults to 0).
+// Called from parseArrayDecl when FROM or FOR is detected after the array expression.
 // lbracketToken is the [ token, arrayExpr is the already-parsed array expression.
 func (p *Parser) parseSliceAssignment(lbracketToken lexer.Token, arrayExpr ast.Expression) ast.Statement {
-	p.nextToken() // consume FROM
-	p.nextToken() // move to start expression
-	startExpr := p.parseExpression(LOWEST)
+	var startExpr ast.Expression
+	if p.peekTokenIs(lexer.FOR) {
+		// [arr FOR length] shorthand — start is 0
+		startExpr = &ast.IntegerLiteral{Token: lexer.Token{Type: lexer.INT, Literal: "0"}, Value: 0}
+	} else {
+		p.nextToken() // consume FROM
+		p.nextToken() // move to start expression
+		startExpr = p.parseExpression(LOWEST)
+	}
 
 	if !p.expectPeek(lexer.FOR) {
 		return nil
@@ -1861,6 +1878,13 @@ procBodyDone:
 	return proc
 }
 
+// isTypeToken returns true if the token type is a scalar type keyword.
+func isTypeToken(t lexer.TokenType) bool {
+	return t == lexer.INT_TYPE || t == lexer.BYTE_TYPE ||
+		t == lexer.BOOL_TYPE || t == lexer.REAL_TYPE ||
+		t == lexer.REAL32_TYPE || t == lexer.REAL64_TYPE
+}
+
 func (p *Parser) parseProcParams() []ast.ProcParam {
 	var params []ast.ProcParam
 
@@ -1870,8 +1894,48 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 
 	p.nextToken()
 
+	// Track the previous param's type info for shared-type parameters
+	var prevParam *ast.ProcParam
+
 	for {
+		// Skip newlines inside parameter lists (multi-line params)
+		// Note: INDENT/DEDENT/NEWLINE inside (...) are suppressed by the lexer
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+
 		param := ast.ProcParam{}
+
+		// Check if this is a shared-type parameter: after a comma, if current token
+		// is an IDENT that is NOT a type keyword, record name, CHAN, VAL, RESULT, or [,
+		// re-use the previous param's type/flags.
+		if prevParam != nil && p.curTokenIs(lexer.IDENT) && !p.recordNames[p.curToken.Literal] {
+			// This is a shared-type param — re-use type info from previous param
+			param.IsVal = prevParam.IsVal
+			param.Type = prevParam.Type
+			param.IsChan = prevParam.IsChan
+			param.IsChanArray = prevParam.IsChanArray
+			param.IsOpenArray = prevParam.IsOpenArray
+			param.ChanElemType = prevParam.ChanElemType
+			param.ArraySize = prevParam.ArraySize
+			param.Name = p.curToken.Literal
+
+			// Check for channel direction marker (? or !)
+			if (param.IsChan || param.IsChanArray) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
+				p.nextToken()
+				param.ChanDir = p.curToken.Literal
+			}
+
+			params = append(params, param)
+			prevParam = &params[len(params)-1]
+
+			if !p.peekTokenIs(lexer.COMMA) {
+				break
+			}
+			p.nextToken() // consume comma
+			p.nextToken() // move to next param
+			continue
+		}
 
 		// Check for VAL keyword
 		if p.curTokenIs(lexer.VAL) {
@@ -1879,44 +1943,66 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Check for []CHAN OF <type> or []TYPE (open array parameter)
-		if p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
-			p.nextToken() // consume ]
-			p.nextToken() // move past ]
-			if p.curTokenIs(lexer.CHAN) {
-				// []CHAN OF <type> or []CHAN <type> (channel array parameter)
-				param.IsChan = true
-				param.IsChanArray = true
-				if p.peekTokenIs(lexer.OF) {
-					p.nextToken() // consume OF
-				}
-				p.nextToken() // move to element type
-				if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-					p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
-					p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
-					param.ChanElemType = p.curToken.Literal
-				} else if p.curTokenIs(lexer.IDENT) {
-					param.ChanElemType = p.curToken.Literal
+		// Check for RESULT keyword (output-only parameter — maps to pointer like non-VAL)
+		if p.curTokenIs(lexer.RESULT) {
+			// RESULT is semantically like non-VAL (pointer param), just skip it
+			p.nextToken()
+		}
+
+		// Check for []CHAN OF <type>, []TYPE (open array), or [n]TYPE (fixed-size array)
+		if p.curTokenIs(lexer.LBRACKET) {
+			if p.peekTokenIs(lexer.RBRACKET) {
+				// Open array: []CHAN OF TYPE or []TYPE
+				p.nextToken() // consume ]
+				p.nextToken() // move past ]
+				if p.curTokenIs(lexer.CHAN) {
+					// []CHAN OF <type> or []CHAN <type> (channel array parameter)
+					param.IsChan = true
+					param.IsChanArray = true
+					if p.peekTokenIs(lexer.OF) {
+						p.nextToken() // consume OF
+					}
+					p.nextToken() // move to element type
+					if isTypeToken(p.curToken.Type) || p.curTokenIs(lexer.IDENT) {
+						param.ChanElemType = p.curToken.Literal
+					} else {
+						p.addError(fmt.Sprintf("expected type after []CHAN, got %s", p.curToken.Type))
+						return params
+					}
+					p.nextToken()
+				} else if isTypeToken(p.curToken.Type) {
+					param.IsOpenArray = true
+					param.Type = p.curToken.Literal
+					p.nextToken()
+				} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
+					param.IsOpenArray = true
+					param.Type = p.curToken.Literal
+					p.nextToken()
 				} else {
-					p.addError(fmt.Sprintf("expected type after []CHAN, got %s", p.curToken.Type))
+					p.addError(fmt.Sprintf("expected type after [], got %s", p.curToken.Type))
+					return params
+				}
+			} else {
+				// Fixed-size array: [n]TYPE
+				p.nextToken() // move past [
+				if !p.curTokenIs(lexer.INT) {
+					p.addError(fmt.Sprintf("expected array size, got %s", p.curToken.Type))
+					return params
+				}
+				param.ArraySize = p.curToken.Literal
+				if !p.expectPeek(lexer.RBRACKET) {
+					return params
+				}
+				p.nextToken() // move to type
+				if isTypeToken(p.curToken.Type) {
+					param.Type = p.curToken.Literal
+				} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
+					param.Type = p.curToken.Literal
+				} else {
+					p.addError(fmt.Sprintf("expected type after [%s], got %s", param.ArraySize, p.curToken.Type))
 					return params
 				}
 				p.nextToken()
-			} else if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
-				p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
-				// []TYPE (open array parameter)
-				param.IsOpenArray = true
-				param.Type = p.curToken.Literal
-				p.nextToken()
-			} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
-				// []RECORD (open array of record type)
-				param.IsOpenArray = true
-				param.Type = p.curToken.Literal
-				p.nextToken()
-			} else {
-				p.addError(fmt.Sprintf("expected type after [], got %s", p.curToken.Type))
-				return params
 			}
 		} else if p.curTokenIs(lexer.CHAN) {
 			// Check for CHAN OF <type> or CHAN <type>
@@ -1925,11 +2011,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				p.nextToken() // consume OF
 			}
 			p.nextToken() // move to element type
-			if p.curTokenIs(lexer.INT_TYPE) || p.curTokenIs(lexer.BYTE_TYPE) ||
-				p.curTokenIs(lexer.BOOL_TYPE) || p.curTokenIs(lexer.REAL_TYPE) ||
-				p.curTokenIs(lexer.REAL32_TYPE) || p.curTokenIs(lexer.REAL64_TYPE) {
-				param.ChanElemType = p.curToken.Literal
-			} else if p.curTokenIs(lexer.IDENT) {
+			if isTypeToken(p.curToken.Type) || p.curTokenIs(lexer.IDENT) {
 				param.ChanElemType = p.curToken.Literal
 			} else {
 				p.addError(fmt.Sprintf("expected type after CHAN, got %s", p.curToken.Type))
@@ -1942,9 +2024,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		} else {
 			// Expect scalar type
-			if !p.curTokenIs(lexer.INT_TYPE) && !p.curTokenIs(lexer.BYTE_TYPE) &&
-				!p.curTokenIs(lexer.BOOL_TYPE) && !p.curTokenIs(lexer.REAL_TYPE) &&
-				!p.curTokenIs(lexer.REAL32_TYPE) && !p.curTokenIs(lexer.REAL64_TYPE) {
+			if !isTypeToken(p.curToken.Type) {
 				p.addError(fmt.Sprintf("expected type in parameter, got %s", p.curToken.Type))
 				return params
 			}
@@ -1966,6 +2046,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 		}
 
 		params = append(params, param)
+		prevParam = &params[len(params)-1]
 
 		if !p.peekTokenIs(lexer.COMMA) {
 			break
@@ -2120,17 +2201,32 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		return fn
 	}
 	p.nextToken() // consume INDENT
+	startLevel := p.indentLevel
 	p.nextToken() // move into VALOF body
 
-	// Parse the body statement (e.g., SEQ, IF, etc.)
-	bodyStmt := p.parseStatement()
-	if bodyStmt != nil {
-		fn.Body = append(fn.Body, bodyStmt)
-	}
-
-	// Advance past nested DEDENTs/newlines to RESULT
+	// Parse the VALOF body — declarations and statements until RESULT
 	for !p.curTokenIs(lexer.RESULT) && !p.curTokenIs(lexer.EOF) {
-		p.nextToken()
+		// Skip newlines
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+		// Handle DEDENTs
+		for p.curTokenIs(lexer.DEDENT) {
+			if p.indentLevel < startLevel {
+				break
+			}
+			p.nextToken()
+		}
+		if p.curTokenIs(lexer.EOF) || p.curTokenIs(lexer.RESULT) {
+			break
+		}
+		stmt := p.parseStatement()
+		if stmt != nil {
+			fn.Body = append(fn.Body, stmt)
+		}
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) && !p.curTokenIs(lexer.RESULT) {
+			p.nextToken()
+		}
 	}
 
 	// Parse RESULT expression(s) — comma-separated for multi-result functions
@@ -2468,7 +2564,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		if !p.expectPeek(lexer.RPAREN) {
 			return nil
 		}
-	case lexer.MINUS:
+	case lexer.MINUS, lexer.MINUS_KW:
 		token := p.curToken
 		p.nextToken()
 		left = &ast.UnaryExpr{
@@ -2493,15 +2589,21 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Right:    p.parseExpression(PREFIX),
 		}
 	case lexer.LBRACKET:
-		// Slice expression: [arr FROM start FOR length]
+		// Slice expression: [arr FROM start FOR length] or [arr FOR length]
 		lbracket := p.curToken
 		p.nextToken() // move past [
 		arrayExpr := p.parseExpression(LOWEST)
-		if !p.expectPeek(lexer.FROM) {
-			return nil
+		var startExpr ast.Expression
+		if p.peekTokenIs(lexer.FOR) {
+			// [arr FOR length] shorthand — start is 0
+			startExpr = &ast.IntegerLiteral{Token: lexer.Token{Type: lexer.INT, Literal: "0"}, Value: 0}
+		} else {
+			if !p.expectPeek(lexer.FROM) {
+				return nil
+			}
+			p.nextToken() // move past FROM
+			startExpr = p.parseExpression(LOWEST)
 		}
-		p.nextToken() // move past FROM
-		startExpr := p.parseExpression(LOWEST)
 		if !p.expectPeek(lexer.FOR) {
 			return nil
 		}

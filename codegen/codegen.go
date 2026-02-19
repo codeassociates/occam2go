@@ -48,6 +48,12 @@ func New() *Generator {
 	return &Generator{}
 }
 
+// goIdent converts an occam identifier to a valid Go identifier.
+// Occam allows dots in identifiers (e.g., out.repeat); Go does not.
+func goIdent(name string) string {
+	return strings.ReplaceAll(name, ".", "_")
+}
+
 // Generate produces Go code from the AST
 func (g *Generator) Generate(program *ast.Program) string {
 	g.builder.Reset()
@@ -132,12 +138,34 @@ func (g *Generator) Generate(program *ast.Program) string {
 	var procDecls []ast.Statement
 	var mainStatements []ast.Statement
 
+	// First pass: check if there are any proc/func declarations
+	hasProcDecls := false
+	for _, stmt := range program.Statements {
+		if _, ok := stmt.(*ast.ProcDecl); ok {
+			hasProcDecls = true
+			break
+		}
+		if _, ok := stmt.(*ast.FuncDecl); ok {
+			hasProcDecls = true
+			break
+		}
+	}
+
+	var abbrDecls []ast.Statement
 	for _, stmt := range program.Statements {
 		switch stmt.(type) {
 		case *ast.ProtocolDecl, *ast.RecordDecl:
 			typeDecls = append(typeDecls, stmt)
 		case *ast.ProcDecl, *ast.FuncDecl:
 			procDecls = append(procDecls, stmt)
+		case *ast.Abbreviation:
+			if hasProcDecls {
+				// Top-level abbreviations need to be at package level
+				// so PROCs can reference them
+				abbrDecls = append(abbrDecls, stmt)
+			} else {
+				mainStatements = append(mainStatements, stmt)
+			}
 		default:
 			mainStatements = append(mainStatements, stmt)
 		}
@@ -146,6 +174,22 @@ func (g *Generator) Generate(program *ast.Program) string {
 	// Generate type definitions first (at package level)
 	for _, stmt := range typeDecls {
 		g.generateStatement(stmt)
+	}
+
+	// Generate package-level abbreviations (constants)
+	for _, stmt := range abbrDecls {
+		abbr := stmt.(*ast.Abbreviation)
+		goType := g.occamTypeToGo(abbr.Type)
+		if abbr.IsOpenArray {
+			goType = "[]" + goType
+		}
+		g.builder.WriteString("var ")
+		g.write(fmt.Sprintf("%s %s = ", goIdent(abbr.Name), goType))
+		g.generateExpression(abbr.Value)
+		g.write("\n")
+	}
+	if len(abbrDecls) > 0 {
+		g.writeLine("")
 	}
 
 	// Generate procedure declarations (at package level)
@@ -718,12 +762,20 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 
 func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 	goType := g.occamTypeToGo(decl.Type)
-	g.writeLine(fmt.Sprintf("var %s %s", strings.Join(decl.Names, ", "), goType))
+	goNames := make([]string, len(decl.Names))
+	for i, n := range decl.Names {
+		goNames[i] = goIdent(n)
+	}
+	g.writeLine(fmt.Sprintf("var %s %s", strings.Join(goNames, ", "), goType))
+	// Suppress "declared and not used" for each variable
+	for _, n := range goNames {
+		g.writeLine(fmt.Sprintf("_ = %s", n))
+	}
 }
 
 func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	g.write(fmt.Sprintf("%s := ", abbr.Name))
+	g.write(fmt.Sprintf("%s := ", goIdent(abbr.Name)))
 	g.generateExpression(abbr.Value)
 	g.write("\n")
 }
@@ -732,16 +784,17 @@ func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	goType := g.occamTypeToGo(decl.ElemType)
 	if decl.IsArray {
 		for _, name := range decl.Names {
+			n := goIdent(name)
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("%s := make([]chan %s, ", name, goType))
+			g.write(fmt.Sprintf("%s := make([]chan %s, ", n, goType))
 			g.generateExpression(decl.Size)
 			g.write(")\n")
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("for _i := range %s { %s[_i] = make(chan %s) }\n", name, name, goType))
+			g.write(fmt.Sprintf("for _i := range %s { %s[_i] = make(chan %s) }\n", n, n, goType))
 		}
 	} else {
 		for _, name := range decl.Names {
-			g.writeLine(fmt.Sprintf("%s := make(chan %s)", name, goType))
+			g.writeLine(fmt.Sprintf("%s := make(chan %s)", goIdent(name), goType))
 		}
 	}
 }
@@ -753,14 +806,15 @@ func (g *Generator) generateTimerDecl(decl *ast.TimerDecl) {
 }
 
 func (g *Generator) generateTimerRead(tr *ast.TimerRead) {
-	g.writeLine(fmt.Sprintf("%s = int(time.Now().UnixMicro())", tr.Variable))
+	g.writeLine(fmt.Sprintf("%s = int(time.Now().UnixMicro())", goIdent(tr.Variable)))
 }
 
 func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
 	goType := g.occamTypeToGo(decl.Type)
 	for _, name := range decl.Names {
+		n := goIdent(name)
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write(fmt.Sprintf("%s := make([]%s, ", name, goType))
+		g.write(fmt.Sprintf("%s := make([]%s, ", n, goType))
 		g.generateExpression(decl.Size)
 		g.write(")\n")
 	}
@@ -768,7 +822,7 @@ func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
 
 func (g *Generator) generateSend(send *ast.Send) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	g.write(send.Channel)
+	g.write(goIdent(send.Channel))
 	if send.ChannelIndex != nil {
 		g.write("[")
 		g.generateExpression(send.ChannelIndex)
@@ -778,10 +832,11 @@ func (g *Generator) generateSend(send *ast.Send) {
 
 	protoName := g.chanProtocols[send.Channel]
 	proto := g.protocolDefs[protoName]
+	gProtoName := goIdent(protoName)
 
 	if send.VariantTag != "" && proto != nil && proto.Kind == "variant" {
 		// Variant send with explicit tag: c <- _proto_NAME_tag{values...}
-		g.write(fmt.Sprintf("_proto_%s_%s{", protoName, send.VariantTag))
+		g.write(fmt.Sprintf("_proto_%s_%s{", gProtoName, goIdent(send.VariantTag)))
 		for i, val := range send.Values {
 			if i > 0 {
 				g.write(", ")
@@ -792,13 +847,13 @@ func (g *Generator) generateSend(send *ast.Send) {
 	} else if proto != nil && proto.Kind == "variant" && send.Value != nil && len(send.Values) == 0 {
 		// Check if the send value is a bare identifier matching a variant tag
 		if ident, ok := send.Value.(*ast.Identifier); ok && g.isVariantTag(protoName, ident.Value) {
-			g.write(fmt.Sprintf("_proto_%s_%s{}", protoName, ident.Value))
+			g.write(fmt.Sprintf("_proto_%s_%s{}", gProtoName, goIdent(ident.Value)))
 		} else {
 			g.generateExpression(send.Value)
 		}
 	} else if len(send.Values) > 0 && proto != nil && proto.Kind == "sequential" {
 		// Sequential send: c <- _proto_NAME{val1, val2, ...}
-		g.write(fmt.Sprintf("_proto_%s{", protoName))
+		g.write(fmt.Sprintf("_proto_%s{", gProtoName))
 		g.generateExpression(send.Value)
 		for _, val := range send.Values {
 			g.write(", ")
@@ -813,10 +868,10 @@ func (g *Generator) generateSend(send *ast.Send) {
 }
 
 func (g *Generator) generateReceive(recv *ast.Receive) {
-	chanRef := recv.Channel
+	chanRef := goIdent(recv.Channel)
 	if recv.ChannelIndex != nil {
 		var buf strings.Builder
-		buf.WriteString(recv.Channel)
+		buf.WriteString(goIdent(recv.Channel))
 		buf.WriteString("[")
 		// Generate the index expression into a temporary buffer
 		oldBuilder := g.builder
@@ -833,23 +888,36 @@ func (g *Generator) generateReceive(recv *ast.Receive) {
 		tmpName := fmt.Sprintf("_tmp%d", g.tmpCounter)
 		g.tmpCounter++
 		g.writeLine(fmt.Sprintf("%s := <-%s", tmpName, chanRef))
-		g.writeLine(fmt.Sprintf("%s = %s._0", recv.Variable, tmpName))
+		varRef := goIdent(recv.Variable)
+		if g.refParams[recv.Variable] {
+			varRef = "*" + varRef
+		}
+		g.writeLine(fmt.Sprintf("%s = %s._0", varRef, tmpName))
 		for i, v := range recv.Variables {
-			g.writeLine(fmt.Sprintf("%s = %s._%d", v, tmpName, i+1))
+			vRef := goIdent(v)
+			if g.refParams[v] {
+				vRef = "*" + vRef
+			}
+			g.writeLine(fmt.Sprintf("%s = %s._%d", vRef, tmpName, i+1))
 		}
 	} else {
-		g.writeLine(fmt.Sprintf("%s = <-%s", recv.Variable, chanRef))
+		varRef := goIdent(recv.Variable)
+		if g.refParams[recv.Variable] {
+			varRef = "*" + varRef
+		}
+		g.writeLine(fmt.Sprintf("%s = <-%s", varRef, chanRef))
 	}
 }
 
 func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
+	gName := goIdent(proto.Name)
 	switch proto.Kind {
 	case "simple":
 		goType := g.occamTypeToGoBase(proto.Types[0])
-		g.writeLine(fmt.Sprintf("type _proto_%s = %s", proto.Name, goType))
+		g.writeLine(fmt.Sprintf("type _proto_%s = %s", gName, goType))
 		g.writeLine("")
 	case "sequential":
-		g.writeLine(fmt.Sprintf("type _proto_%s struct {", proto.Name))
+		g.writeLine(fmt.Sprintf("type _proto_%s struct {", gName))
 		g.indent++
 		for i, t := range proto.Types {
 			goType := g.occamTypeToGoBase(t)
@@ -860,19 +928,20 @@ func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
 		g.writeLine("")
 	case "variant":
 		// Interface type
-		g.writeLine(fmt.Sprintf("type _proto_%s interface {", proto.Name))
+		g.writeLine(fmt.Sprintf("type _proto_%s interface {", gName))
 		g.indent++
-		g.writeLine(fmt.Sprintf("_is_%s()", proto.Name))
+		g.writeLine(fmt.Sprintf("_is_%s()", gName))
 		g.indent--
 		g.writeLine("}")
 		g.writeLine("")
 		// Concrete types for each variant
 		for _, v := range proto.Variants {
+			gTag := goIdent(v.Tag)
 			if len(v.Types) == 0 {
 				// No-payload variant: empty struct
-				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct{}", proto.Name, v.Tag))
+				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct{}", gName, gTag))
 			} else {
-				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct {", proto.Name, v.Tag))
+				g.writeLine(fmt.Sprintf("type _proto_%s_%s struct {", gName, gTag))
 				g.indent++
 				for i, t := range v.Types {
 					goType := g.occamTypeToGoBase(t)
@@ -881,7 +950,7 @@ func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
 				g.indent--
 				g.writeLine("}")
 			}
-			g.writeLine(fmt.Sprintf("func (_proto_%s_%s) _is_%s() {}", proto.Name, v.Tag, proto.Name))
+			g.writeLine(fmt.Sprintf("func (_proto_%s_%s) _is_%s() {}", gName, gTag, gName))
 			g.writeLine("")
 		}
 	}
@@ -889,10 +958,11 @@ func (g *Generator) generateProtocolDecl(proto *ast.ProtocolDecl) {
 
 func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
 	protoName := g.chanProtocols[vr.Channel]
-	chanRef := vr.Channel
+	gProtoName := goIdent(protoName)
+	chanRef := goIdent(vr.Channel)
 	if vr.ChannelIndex != nil {
 		var buf strings.Builder
-		buf.WriteString(vr.Channel)
+		buf.WriteString(goIdent(vr.Channel))
 		buf.WriteString("[")
 		oldBuilder := g.builder
 		g.builder = strings.Builder{}
@@ -904,10 +974,10 @@ func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
 	}
 	g.writeLine(fmt.Sprintf("switch _v := (<-%s).(type) {", chanRef))
 	for _, vc := range vr.Cases {
-		g.writeLine(fmt.Sprintf("case _proto_%s_%s:", protoName, vc.Tag))
+		g.writeLine(fmt.Sprintf("case _proto_%s_%s:", gProtoName, goIdent(vc.Tag)))
 		g.indent++
 		for i, v := range vc.Variables {
-			g.writeLine(fmt.Sprintf("%s = _v._%d", v, i))
+			g.writeLine(fmt.Sprintf("%s = _v._%d", goIdent(v), i))
 		}
 		if vc.Body != nil {
 			g.generateStatement(vc.Body)
@@ -1050,11 +1120,11 @@ func (g *Generator) collectRecordVars(stmt ast.Statement) {
 }
 
 func (g *Generator) generateRecordDecl(rec *ast.RecordDecl) {
-	g.writeLine(fmt.Sprintf("type %s struct {", rec.Name))
+	g.writeLine(fmt.Sprintf("type %s struct {", goIdent(rec.Name)))
 	g.indent++
 	for _, f := range rec.Fields {
 		goType := g.occamTypeToGoBase(f.Type)
-		g.writeLine(fmt.Sprintf("%s %s", f.Name, goType))
+		g.writeLine(fmt.Sprintf("%s %s", goIdent(f.Name), goType))
 	}
 	g.indent--
 	g.writeLine("}")
@@ -1134,9 +1204,9 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 		if _, ok := g.recordVars[assign.Name]; ok {
 			if ident, ok := assign.Index.(*ast.Identifier); ok {
 				// Record field: p.x = value (Go auto-dereferences pointers)
-				g.write(assign.Name)
+				g.write(goIdent(assign.Name))
 				g.write(".")
-				g.write(ident.Value)
+				g.write(goIdent(ident.Value))
 				g.write(" = ")
 				g.generateExpression(assign.Value)
 				g.write("\n")
@@ -1147,7 +1217,7 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 		if g.refParams[assign.Name] {
 			g.write("*")
 		}
-		g.write(assign.Name)
+		g.write(goIdent(assign.Name))
 		g.write("[")
 		g.generateExpression(assign.Index)
 		g.write("]")
@@ -1156,7 +1226,7 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 		if g.refParams[assign.Name] {
 			g.write("*")
 		}
-		g.write(assign.Name)
+		g.write(goIdent(assign.Name))
 	}
 	g.write(" = ")
 	g.generateExpression(assign.Value)
@@ -1167,7 +1237,7 @@ func (g *Generator) generateSeqBlock(seq *ast.SeqBlock) {
 	if seq.Replicator != nil {
 		if seq.Replicator.Step != nil {
 			// Replicated SEQ with STEP: counter-based loop
-			v := seq.Replicator.Variable
+			v := goIdent(seq.Replicator.Variable)
 			counter := "_repl_" + v
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
 			g.write(fmt.Sprintf("for %s := 0; %s < ", counter, counter))
@@ -1182,14 +1252,15 @@ func (g *Generator) generateSeqBlock(seq *ast.SeqBlock) {
 			g.write("\n")
 		} else {
 			// Replicated SEQ: SEQ i = start FOR count becomes a for loop
+			v := goIdent(seq.Replicator.Variable)
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("for %s := ", seq.Replicator.Variable))
+			g.write(fmt.Sprintf("for %s := ", v))
 			g.generateExpression(seq.Replicator.Start)
-			g.write(fmt.Sprintf("; %s < ", seq.Replicator.Variable))
+			g.write(fmt.Sprintf("; %s < ", v))
 			g.generateExpression(seq.Replicator.Start)
 			g.write(" + ")
 			g.generateExpression(seq.Replicator.Count)
-			g.write(fmt.Sprintf("; %s++ {\n", seq.Replicator.Variable))
+			g.write(fmt.Sprintf("; %s++ {\n", v))
 			g.indent++
 		}
 		for _, stmt := range seq.Statements {
@@ -1214,7 +1285,7 @@ func (g *Generator) generateParBlock(par *ast.ParBlock) {
 		g.generateExpression(par.Replicator.Count)
 		g.write("))\n")
 
-		v := par.Replicator.Variable
+		v := goIdent(par.Replicator.Variable)
 		if par.Replicator.Step != nil {
 			counter := "_repl_" + v
 			g.builder.WriteString(strings.Repeat("\t", g.indent))
@@ -1298,7 +1369,7 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 				g.builder.WriteString(strings.Repeat("\t", g.indent))
 				g.write(fmt.Sprintf("if "))
 				g.generateExpression(c.Guard)
-				g.write(fmt.Sprintf(" { _alt%d = %s }\n", i, c.Channel))
+				g.write(fmt.Sprintf(" { _alt%d = %s }\n", i, goIdent(c.Channel)))
 			}
 		}
 	}
@@ -1311,13 +1382,13 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.generateExpression(c.Deadline)
 			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
 		} else if c.Guard != nil {
-			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", c.Variable, i))
+			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", goIdent(c.Variable), i))
 		} else if c.ChannelIndex != nil {
-			g.write(fmt.Sprintf("case %s = <-%s[", c.Variable, c.Channel))
+			g.write(fmt.Sprintf("case %s = <-%s[", goIdent(c.Variable), goIdent(c.Channel)))
 			g.generateExpression(c.ChannelIndex)
 			g.write("]:\n")
 		} else {
-			g.write(fmt.Sprintf("case %s = <-%s:\n", c.Variable, c.Channel))
+			g.write(fmt.Sprintf("case %s = <-%s:\n", goIdent(c.Variable), goIdent(c.Channel)))
 		}
 		g.indent++
 		for _, s := range c.Body {
@@ -1362,11 +1433,12 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 
 	// Generate function signature
 	params := g.generateProcParams(proc.Params)
+	gName := goIdent(proc.Name)
 	if g.nestingLevel > 0 {
 		// Nested PROC: generate as Go closure
-		g.writeLine(fmt.Sprintf("%s := func(%s) {", proc.Name, params))
+		g.writeLine(fmt.Sprintf("%s := func(%s) {", gName, params))
 	} else {
-		g.writeLine(fmt.Sprintf("func %s(%s) {", proc.Name, params))
+		g.writeLine(fmt.Sprintf("func %s(%s) {", gName, params))
 	}
 	g.indent++
 	g.nestingLevel++
@@ -1394,6 +1466,12 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 			goType = chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsOpenArray {
 			goType = "[]" + g.occamTypeToGo(p.Type)
+		} else if p.ArraySize != "" {
+			// Fixed-size array parameter: [n]TYPE
+			goType = "[" + p.ArraySize + "]" + g.occamTypeToGo(p.Type)
+			if !p.IsVal {
+				goType = "*" + goType
+			}
 		} else {
 			goType = g.occamTypeToGo(p.Type)
 			if !p.IsVal {
@@ -1401,7 +1479,7 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 				goType = "*" + goType
 			}
 		}
-		parts = append(parts, fmt.Sprintf("%s %s", p.Name, goType))
+		parts = append(parts, fmt.Sprintf("%s %s", goIdent(p.Name), goType))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -1425,7 +1503,7 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 	}
 
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	g.write(call.Name)
+	g.write(goIdent(call.Name))
 	g.write("(")
 
 	// Look up procedure signature to determine which args need address-of
@@ -1437,10 +1515,17 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
 		// Channels and channel arrays are already reference types, so no & needed
-		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray && !params[i].IsOpenArray {
+		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray && !params[i].IsOpenArray && params[i].ArraySize == "" {
 			g.write("&")
 		}
-		g.generateExpression(arg)
+		// Wrap string literals with []byte() when passed to []BYTE parameters
+		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].IsOpenArray && params[i].Type == "BYTE" {
+			g.write("[]byte(")
+			g.generateExpression(arg)
+			g.write(")")
+		} else {
+			g.generateExpression(arg)
+		}
 	}
 	g.write(")")
 	g.write("\n")
@@ -1461,11 +1546,12 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 		returnTypeStr = "(" + strings.Join(goTypes, ", ") + ")"
 	}
 
+	gName := goIdent(fn.Name)
 	if g.nestingLevel > 0 {
 		// Nested FUNCTION: generate as Go closure
-		g.writeLine(fmt.Sprintf("%s := func(%s) %s {", fn.Name, params, returnTypeStr))
+		g.writeLine(fmt.Sprintf("%s := func(%s) %s {", gName, params, returnTypeStr))
 	} else {
-		g.writeLine(fmt.Sprintf("func %s(%s) %s {", fn.Name, params, returnTypeStr))
+		g.writeLine(fmt.Sprintf("func %s(%s) %s {", gName, params, returnTypeStr))
 	}
 	g.indent++
 	g.nestingLevel++
@@ -1493,13 +1579,21 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 }
 
 func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
-	g.write(call.Name)
+	g.write(goIdent(call.Name))
 	g.write("(")
+	params := g.procSigs[call.Name]
 	for i, arg := range call.Args {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.generateExpression(arg)
+		// Wrap string literals with []byte() when passed to []BYTE parameters
+		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].IsOpenArray && params[i].Type == "BYTE" {
+			g.write("[]byte(")
+			g.generateExpression(arg)
+			g.write(")")
+		} else {
+			g.generateExpression(arg)
+		}
 	}
 	g.write(")")
 }
@@ -1514,18 +1608,18 @@ func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
 			// Check if this is a record field access
 			if _, ok := g.recordVars[target.Name]; ok {
 				if ident, ok := target.Index.(*ast.Identifier); ok {
-					g.write(target.Name)
+					g.write(goIdent(target.Name))
 					g.write(".")
-					g.write(ident.Value)
+					g.write(goIdent(ident.Value))
 					continue
 				}
 			}
 			if g.refParams[target.Name] {
 				g.write("(*")
-				g.write(target.Name)
+				g.write(goIdent(target.Name))
 				g.write(")")
 			} else {
-				g.write(target.Name)
+				g.write(goIdent(target.Name))
 			}
 			g.write("[")
 			g.generateExpression(target.Index)
@@ -1534,7 +1628,7 @@ func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
 			if g.refParams[target.Name] {
 				g.write("*")
 			}
-			g.write(target.Name)
+			g.write(goIdent(target.Name))
 		}
 	}
 	g.write(" = ")
@@ -1606,10 +1700,10 @@ func (g *Generator) flattenIfChoices(choices []ast.IfChoice) []ast.IfChoice {
 }
 
 // generateReplicatedIfLoop emits a for loop that breaks on first matching choice.
-// When withinFlag is true, it sets _ifmatched = true before breaking.
-func (g *Generator) generateReplicatedIfLoop(stmt *ast.IfStatement, withinFlag bool) {
+// When withinFlag is true, it sets the named flag to true before breaking.
+func (g *Generator) generateReplicatedIfLoop(stmt *ast.IfStatement, withinFlag bool, flagName ...string) {
 	repl := stmt.Replicator
-	v := repl.Variable
+	v := goIdent(repl.Variable)
 	if repl.Step != nil {
 		counter := "_repl_" + v
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
@@ -1649,8 +1743,8 @@ func (g *Generator) generateReplicatedIfLoop(stmt *ast.IfStatement, withinFlag b
 		for _, s := range choice.Body {
 			g.generateStatement(s)
 		}
-		if withinFlag {
-			g.writeLine("_ifmatched = true")
+		if withinFlag && len(flagName) > 0 {
+			g.writeLine(fmt.Sprintf("%s = true", flagName[0]))
 		}
 		g.writeLine("break")
 
@@ -1730,15 +1824,17 @@ func (g *Generator) generateIfChoiceChain(choices []ast.IfChoice, isFirst bool) 
 
 	// Emit the replicated nested IF with a flag
 	needFlag := len(after) > 0
+	flagName := fmt.Sprintf("_ifmatched%d", g.tmpCounter)
+	g.tmpCounter++
 	if needFlag {
-		g.writeLine("_ifmatched := false")
+		g.writeLine(fmt.Sprintf("%s := false", flagName))
 	}
-	g.generateReplicatedIfLoop(replChoice.NestedIf, needFlag)
+	g.generateReplicatedIfLoop(replChoice.NestedIf, needFlag, flagName)
 
-	// Emit remaining choices inside if !_ifmatched (recursive for multiple)
+	// Emit remaining choices inside if !flagName (recursive for multiple)
 	if len(after) > 0 {
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write("if !_ifmatched {\n")
+		g.write(fmt.Sprintf("if !%s {\n", flagName))
 		g.indent++
 		g.generateIfChoiceChain(after, true) // recursive for remaining
 		g.indent--
@@ -1784,7 +1880,11 @@ func (g *Generator) generateCaseStatement(stmt *ast.CaseStatement) {
 func (g *Generator) generateExpression(expr ast.Expression) {
 	switch e := expr.(type) {
 	case *ast.Identifier:
-		g.write(e.Value)
+		if g.refParams[e.Value] {
+			g.write("*" + goIdent(e.Value))
+		} else {
+			g.write(goIdent(e.Value))
+		}
 	case *ast.IntegerLiteral:
 		g.write(fmt.Sprintf("%d", e.Value))
 	case *ast.StringLiteral:
@@ -1816,7 +1916,7 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 				if field, ok := e.Index.(*ast.Identifier); ok {
 					g.generateExpression(e.Left)
 					g.write(".")
-					g.write(field.Value)
+					g.write(goIdent(field.Value))
 					break
 				}
 			}

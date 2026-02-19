@@ -1,0 +1,10 @@
+#IF NOT (DEFINED (COURSE.MODULE))
+#DEFINE COURSE.MODULE
+#INCLUDE "consts.inc"
+#INCLUDE "utils.occ"
+#INCLUDE "string.occ"
+#INCLUDE "demo_cycles.occ"
+#INCLUDE "demo_nets.occ"
+#INCLUDE "file_in.occ"
+#INCLUDE "random.occ"
+#ENDIF
