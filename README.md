@@ -405,7 +405,70 @@ This outputs:
 #ENDIF
 ```
 
-> **Note:** The preprocessor and module infrastructure is in place, but the KRoC course module source files themselves use several occam features not yet supported by the transpiler (abbreviations like `VAL INT x IS 1:`, `CHAN BYTE` without `OF`, `VAL []BYTE` array slice params, `SIZE`, `:` PROC terminators). Full course module transpilation is a future goal. See [TODO.md](TODO.md) for the implementation roadmap.
+### Running Programs with the Course Module
+
+The KRoC [course module](https://www.cs.kent.ac.uk/projects/ofa/kroc/) is a standard occam library providing I/O utilities (`out.string`, `out.int`, `out.repeat`, etc.) for character-level communication over byte channels. The transpiler fully supports it.
+
+Occam programs that follow the standard entry point pattern — a PROC with three `CHAN BYTE` parameters `(keyboard?, screen!, error!)` — automatically get a generated `main()` that wires stdin, stdout, and stderr to channels.
+
+```bash
+# 1. Clone the KRoC repository (one-time setup)
+./scripts/clone-kroc.sh
+
+# 2. Build the transpiler
+go build -o occam2go
+
+# 3. Transpile an example that uses the course module
+./occam2go -I kroc/modules/course/libsrc \
+           -D TARGET.BITS.PER.WORD=32     \
+           -o hello.go examples/course_hello.occ
+
+# 4. Run it
+go run hello.go
+```
+
+Output:
+```
+Hello from occam2go!
+The answer is: 42
+------------------------------
+Counting: 1, 2, 3, 4, 5
+```
+
+The `-I` flag tells the preprocessor where to find the course module source files, and `-D TARGET.BITS.PER.WORD=32` sets the word size expected by the course module (the transpiler defaults to 64).
+
+The example program (`examples/course_hello.occ`):
+```occam
+#INCLUDE "course.module"
+
+PROC hello (CHAN BYTE keyboard?, screen!, error!)
+  SEQ
+    out.string ("Hello from occam2go!*c*n", 0, screen!)
+    out.string ("The answer is: ", 0, screen!)
+    out.int (42, 0, screen!)
+    out.string ("*c*n", 0, screen!)
+    out.repeat ('-', 30, screen!)
+    out.string ("*c*n", 0, screen!)
+    out.string ("Counting: ", 0, screen!)
+    SEQ i = 1 FOR 5
+      SEQ
+        IF
+          i > 1
+            out.string (", ", 0, screen!)
+          TRUE
+            SKIP
+        out.int (i, 0, screen!)
+    out.string ("*c*n", 0, screen!)
+:
+```
+
+You can also transpile the KRoC examples directly:
+```bash
+./occam2go -I kroc/modules/course/libsrc \
+           -D TARGET.BITS.PER.WORD=32     \
+           -o hello_world.go kroc/modules/course/examples/hello_world.occ
+go run hello_world.go
+```
 
 ## How Channels are Mapped
 

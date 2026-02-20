@@ -1,0 +1,36 @@
+-- Hello World example using the KRoC course module.
+--
+-- This demonstrates the standard occam entry point pattern:
+-- a PROC with three CHAN BYTE parameters (keyboard, screen, error)
+-- wired to stdin, stdout, and stderr by the generated main() harness.
+--
+-- The course module provides utility PROCs such as out.string, out.int,
+-- and out.repeat for character-level I/O on byte channels.
+--
+-- To transpile and run:
+--   ./occam2go -I kroc/modules/course/libsrc \
+--              -D TARGET.BITS.PER.WORD=32     \
+--              -o hello.go examples/course_hello.occ
+--   go run hello.go
+
+#INCLUDE "course.module"
+
+PROC hello (CHAN BYTE keyboard?, screen!, error!)
+  SEQ
+    out.string ("Hello from occam2go!*c*n", 0, screen!)
+    out.string ("The answer is: ", 0, screen!)
+    out.int (42, 0, screen!)
+    out.string ("*c*n", 0, screen!)
+    out.repeat ('-', 30, screen!)
+    out.string ("*c*n", 0, screen!)
+    out.string ("Counting: ", 0, screen!)
+    SEQ i = 1 FOR 5
+      SEQ
+        IF
+          i > 1
+            out.string (", ", 0, screen!)
+          TRUE
+            SKIP
+        out.int (i, 0, screen!)
+    out.string ("*c*n", 0, screen!)
+:

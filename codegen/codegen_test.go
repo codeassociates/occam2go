@@ -250,6 +250,17 @@ func TestStringLiteral(t *testing.T) {
 	}
 }
 
+func TestStringEscapeCodegen(t *testing.T) {
+	input := `x := "hello*c*n"
+`
+	output := transpile(t, input)
+
+	// The *c*n should become \r\n in the Go output (via %q formatting)
+	if !strings.Contains(output, `x = "hello\r\n"`) {
+		t.Errorf("expected string with \\r\\n escape, got:\n%s", output)
+	}
+}
+
 func TestByteLiteral(t *testing.T) {
 	input := "x := 'A'\n"
 	output := transpile(t, input)

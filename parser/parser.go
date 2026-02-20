@@ -2314,6 +2314,41 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	return fn
 }
 
+// convertOccamStringEscapes converts occam escape sequences in string literals
+// to their actual byte values. Occam uses *c, *n, *t, *s, **, *", *' as escapes.
+func (p *Parser) convertOccamStringEscapes(raw string) string {
+	var buf strings.Builder
+	buf.Grow(len(raw))
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '*' && i+1 < len(raw) {
+			i++
+			switch raw[i] {
+			case 'n':
+				buf.WriteByte('\n')
+			case 'c':
+				buf.WriteByte('\r')
+			case 't':
+				buf.WriteByte('\t')
+			case 's':
+				buf.WriteByte(' ')
+			case '*':
+				buf.WriteByte('*')
+			case '"':
+				buf.WriteByte('"')
+			case '\'':
+				buf.WriteByte('\'')
+			default:
+				// Unknown escape: pass through as-is
+				buf.WriteByte('*')
+				buf.WriteByte(raw[i])
+			}
+		} else {
+			buf.WriteByte(raw[i])
+		}
+	}
+	return buf.String()
+}
+
 // parseByteLiteralValue processes the raw content of a byte literal (between single quotes),
 // handling occam escape sequences (* prefix), and returns the resulting byte value.
 func (p *Parser) parseByteLiteralValue(raw string) (byte, error) {
@@ -2608,7 +2643,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	case lexer.FALSE:
 		left = &ast.BooleanLiteral{Token: p.curToken, Value: false}
 	case lexer.STRING:
-		left = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+		left = &ast.StringLiteral{Token: p.curToken, Value: p.convertOccamStringEscapes(p.curToken.Literal)}
 	case lexer.BYTE_LIT:
 		b, err := p.parseByteLiteralValue(p.curToken.Literal)
 		if err != nil {

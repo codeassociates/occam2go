@@ -1341,6 +1341,45 @@ func TestStringLiteral(t *testing.T) {
 	}
 }
 
+func TestStringEscapeConversion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`x := "hello*n"` + "\n", "hello\n"},
+		{`x := "hello*c*n"` + "\n", "hello\r\n"},
+		{`x := "*t*s"` + "\n", "\t "},
+		{`x := "a**b"` + "\n", "a*b"},
+		{`x := "it*'s"` + "\n", "it's"},
+		{`x := "no escapes"` + "\n", "no escapes"},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("input %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("input %q: expected Assignment, got %T", tt.input, program.Statements[0])
+		}
+
+		strLit, ok := assign.Value.(*ast.StringLiteral)
+		if !ok {
+			t.Fatalf("input %q: expected StringLiteral, got %T", tt.input, assign.Value)
+		}
+
+		if strLit.Value != tt.expected {
+			t.Errorf("input %q: expected Value=%q, got %q", tt.input, tt.expected, strLit.Value)
+		}
+	}
+}
+
 func TestByteLiteral(t *testing.T) {
 	tests := []struct {
 		input    string
