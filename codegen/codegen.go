@@ -17,6 +17,7 @@ type Generator struct {
 	needOs   bool // track if we need os package import
 	needMath bool // track if we need math package import
 	needMathBits bool // track if we need math/bits package import
+	needBufio    bool // track if we need bufio package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -93,6 +94,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needOs = false
 	g.needMath = false
 	g.needMathBits = false
+	g.needBufio = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -142,42 +144,6 @@ func (g *Generator) Generate(program *ast.Program) string {
 		g.collectRecordVars(stmt)
 	}
 
-	// Write package declaration
-	g.writeLine("package main")
-	g.writeLine("")
-
-	// Write imports
-	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits {
-		g.writeLine("import (")
-		g.indent++
-		if g.needFmt {
-			g.writeLine(`"fmt"`)
-		}
-		if g.needMath {
-			g.writeLine(`"math"`)
-		}
-		if g.needMathBits {
-			g.writeLine(`"math/bits"`)
-		}
-		if g.needOs {
-			g.writeLine(`"os"`)
-		}
-		if g.needSync {
-			g.writeLine(`"sync"`)
-		}
-		if g.needTime {
-			g.writeLine(`"time"`)
-		}
-		g.indent--
-		g.writeLine(")")
-		g.writeLine("")
-	}
-
-	// Emit transputer intrinsic helper functions
-	if g.needMathBits {
-		g.emitIntrinsicHelpers()
-	}
-
 	// Separate protocol, record, procedure declarations from other statements
 	var typeDecls []ast.Statement
 	var procDecls []ast.Statement
@@ -218,6 +184,56 @@ func (g *Generator) Generate(program *ast.Program) string {
 		default:
 			mainStatements = append(mainStatements, stmt)
 		}
+	}
+
+	// Detect entry point PROC so we can set import flags before writing imports
+	var entryProc *ast.ProcDecl
+	if len(mainStatements) == 0 {
+		entryProc = g.findEntryProc(procDecls)
+		if entryProc != nil {
+			g.needOs = true
+			g.needSync = true
+			g.needBufio = true
+		}
+	}
+
+	// Write package declaration
+	g.writeLine("package main")
+	g.writeLine("")
+
+	// Write imports
+	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits || g.needBufio {
+		g.writeLine("import (")
+		g.indent++
+		if g.needBufio {
+			g.writeLine(`"bufio"`)
+		}
+		if g.needFmt {
+			g.writeLine(`"fmt"`)
+		}
+		if g.needMath {
+			g.writeLine(`"math"`)
+		}
+		if g.needMathBits {
+			g.writeLine(`"math/bits"`)
+		}
+		if g.needOs {
+			g.writeLine(`"os"`)
+		}
+		if g.needSync {
+			g.writeLine(`"sync"`)
+		}
+		if g.needTime {
+			g.writeLine(`"time"`)
+		}
+		g.indent--
+		g.writeLine(")")
+		g.writeLine("")
+	}
+
+	// Emit transputer intrinsic helper functions
+	if g.needMathBits {
+		g.emitIntrinsicHelpers()
 	}
 
 	// Generate type definitions first (at package level)
@@ -265,6 +281,8 @@ func (g *Generator) Generate(program *ast.Program) string {
 		g.nestingLevel--
 		g.indent--
 		g.writeLine("}")
+	} else if entryProc != nil {
+		g.generateEntryHarness(entryProc)
 	}
 
 	return g.builder.String()
@@ -334,6 +352,125 @@ func (g *Generator) collectNestedProcSigsScoped(stmts []ast.Statement, oldSigs m
 			}
 		}
 	}
+}
+
+// findEntryProc looks for the last top-level PROC with the standard occam
+// entry point signature: exactly 3 CHAN OF BYTE params (keyboard?, screen!, error!).
+func (g *Generator) findEntryProc(procDecls []ast.Statement) *ast.ProcDecl {
+	var entry *ast.ProcDecl
+	for _, stmt := range procDecls {
+		proc, ok := stmt.(*ast.ProcDecl)
+		if !ok {
+			continue
+		}
+		if len(proc.Params) != 3 {
+			continue
+		}
+		p0, p1, p2 := proc.Params[0], proc.Params[1], proc.Params[2]
+		if p0.IsChan && p0.ChanElemType == "BYTE" && p0.ChanDir == "?" &&
+			p1.IsChan && p1.ChanElemType == "BYTE" && p1.ChanDir == "!" &&
+			p2.IsChan && p2.ChanElemType == "BYTE" && p2.ChanDir == "!" {
+			entry = proc
+		}
+	}
+	return entry
+}
+
+// generateEntryHarness emits a func main() that wires stdin/stdout/stderr
+// to channels and calls the entry PROC.
+func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
+	name := goIdent(proc.Name)
+	g.writeLine("func main() {")
+	g.indent++
+
+	// Create channels
+	g.writeLine("keyboard := make(chan byte, 256)")
+	g.writeLine("screen := make(chan byte, 256)")
+	g.writeLine("_error := make(chan byte, 256)")
+	g.writeLine("")
+
+	// WaitGroup for writer goroutines to finish draining
+	g.writeLine("var wg sync.WaitGroup")
+	g.writeLine("wg.Add(2)")
+	g.writeLine("")
+
+	// Screen writer goroutine
+	g.writeLine("go func() {")
+	g.indent++
+	g.writeLine("defer wg.Done()")
+	g.writeLine("w := bufio.NewWriter(os.Stdout)")
+	g.writeLine("for b := range screen {")
+	g.indent++
+	g.writeLine("if b == 255 {")
+	g.indent++
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("w.WriteByte(b)")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("}()")
+	g.writeLine("")
+
+	// Error writer goroutine
+	g.writeLine("go func() {")
+	g.indent++
+	g.writeLine("defer wg.Done()")
+	g.writeLine("w := bufio.NewWriter(os.Stderr)")
+	g.writeLine("for b := range _error {")
+	g.indent++
+	g.writeLine("if b == 255 {")
+	g.indent++
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
+	g.writeLine("w.WriteByte(b)")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("}()")
+	g.writeLine("")
+
+	// Keyboard reader goroutine
+	g.writeLine("go func() {")
+	g.indent++
+	g.writeLine("r := bufio.NewReader(os.Stdin)")
+	g.writeLine("for {")
+	g.indent++
+	g.writeLine("b, err := r.ReadByte()")
+	g.writeLine("if err != nil {")
+	g.indent++
+	g.writeLine("close(keyboard)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("keyboard <- b")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}()")
+	g.writeLine("")
+
+	// Call the entry proc
+	g.writeLine(fmt.Sprintf("%s(keyboard, screen, _error)", name))
+	g.writeLine("")
+
+	// Close output channels and wait for writers to drain
+	g.writeLine("close(screen)")
+	g.writeLine("close(_error)")
+	g.writeLine("wg.Wait()")
+
+	g.indent--
+	g.writeLine("}")
 }
 
 func (g *Generator) containsPar(stmt ast.Statement) bool {
