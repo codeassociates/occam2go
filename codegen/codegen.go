@@ -16,6 +16,7 @@ type Generator struct {
 	needTime bool // track if we need time package import
 	needOs   bool // track if we need os package import
 	needMath bool // track if we need math package import
+	needMathBits bool // track if we need math/bits package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -33,6 +34,22 @@ type Generator struct {
 
 	// Nesting level: 0 = package level, >0 = inside a function
 	nestingLevel int
+
+	// RETYPES parameter renames: when a RETYPES declaration shadows a
+	// parameter (e.g. VAL INT X RETYPES X :), the parameter is renamed
+	// in the signature so := can create a new variable with the original name.
+	retypesRenames map[string]string
+}
+
+// Transputer intrinsic function names
+var transpIntrinsics = map[string]bool{
+	"LONGPROD":   true,
+	"LONGDIV":    true,
+	"LONGSUM":    true,
+	"LONGDIFF":   true,
+	"NORMALISE":  true,
+	"SHIFTRIGHT": true,
+	"SHIFTLEFT":  true,
 }
 
 // Built-in print procedures
@@ -50,8 +67,21 @@ func New() *Generator {
 
 // goIdent converts an occam identifier to a valid Go identifier.
 // Occam allows dots in identifiers (e.g., out.repeat); Go does not.
+// goReserved is a set of Go keywords and predeclared identifiers that cannot be
+// used as variable names when they also appear as type conversions in the generated code.
+var goReserved = map[string]bool{
+	"byte": true, "int": true, "string": true, "len": true, "cap": true,
+	"make": true, "new": true, "copy": true, "close": true, "delete": true,
+	"panic": true, "recover": true, "print": true, "println": true,
+	"error": true, "rune": true, "bool": true, "true": true, "false": true,
+}
+
 func goIdent(name string) string {
-	return strings.ReplaceAll(name, ".", "_")
+	name = strings.ReplaceAll(name, ".", "_")
+	if goReserved[name] {
+		return "_" + name
+	}
+	return name
 }
 
 // Generate produces Go code from the AST
@@ -62,6 +92,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needTime = false
 	g.needOs = false
 	g.needMath = false
+	g.needMathBits = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -88,6 +119,12 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if g.containsMostExpr(stmt) {
 			g.needMath = true
 		}
+		if g.containsIntrinsics(stmt) {
+			g.needMathBits = true
+		}
+		if g.containsRetypes(stmt) {
+			g.needMath = true
+		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
 			g.collectNestedProcSigs(proc.Body)
@@ -110,7 +147,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath {
+	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits {
 		g.writeLine("import (")
 		g.indent++
 		if g.needFmt {
@@ -118,6 +155,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.needMath {
 			g.writeLine(`"math"`)
+		}
+		if g.needMathBits {
+			g.writeLine(`"math/bits"`)
 		}
 		if g.needOs {
 			g.writeLine(`"os"`)
@@ -131,6 +171,11 @@ func (g *Generator) Generate(program *ast.Program) string {
 		g.indent--
 		g.writeLine(")")
 		g.writeLine("")
+	}
+
+	// Emit transputer intrinsic helper functions
+	if g.needMathBits {
+		g.emitIntrinsicHelpers()
 	}
 
 	// Separate protocol, record, procedure declarations from other statements
@@ -153,7 +198,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 
 	var abbrDecls []ast.Statement
 	for _, stmt := range program.Statements {
-		switch stmt.(type) {
+		switch s := stmt.(type) {
 		case *ast.ProtocolDecl, *ast.RecordDecl:
 			typeDecls = append(typeDecls, stmt)
 		case *ast.ProcDecl, *ast.FuncDecl:
@@ -166,6 +211,10 @@ func (g *Generator) Generate(program *ast.Program) string {
 			} else {
 				mainStatements = append(mainStatements, stmt)
 			}
+		case *ast.RetypesDecl:
+			_ = s
+			// RETYPES declarations are local to functions, not package-level
+			mainStatements = append(mainStatements, stmt)
 		default:
 			mainStatements = append(mainStatements, stmt)
 		}
@@ -179,14 +228,22 @@ func (g *Generator) Generate(program *ast.Program) string {
 	// Generate package-level abbreviations (constants)
 	for _, stmt := range abbrDecls {
 		abbr := stmt.(*ast.Abbreviation)
-		goType := g.occamTypeToGo(abbr.Type)
-		if abbr.IsOpenArray {
-			goType = "[]" + goType
+		if abbr.Type == "" {
+			// Untyped VAL: let Go infer the type
+			g.builder.WriteString("var ")
+			g.write(fmt.Sprintf("%s = ", goIdent(abbr.Name)))
+			g.generateExpression(abbr.Value)
+			g.write("\n")
+		} else {
+			goType := g.occamTypeToGo(abbr.Type)
+			if abbr.IsOpenArray {
+				goType = "[]" + goType
+			}
+			g.builder.WriteString("var ")
+			g.write(fmt.Sprintf("%s %s = ", goIdent(abbr.Name), goType))
+			g.generateExpression(abbr.Value)
+			g.write("\n")
 		}
-		g.builder.WriteString("var ")
-		g.write(fmt.Sprintf("%s %s = ", goIdent(abbr.Name), goType))
-		g.generateExpression(abbr.Value)
-		g.write("\n")
 	}
 	if len(abbrDecls) > 0 {
 		g.writeLine("")
@@ -217,12 +274,64 @@ func (g *Generator) Generate(program *ast.Program) string {
 // from nested declarations inside PROC bodies.
 func (g *Generator) collectNestedProcSigs(stmts []ast.Statement) {
 	for _, stmt := range stmts {
-		if proc, ok := stmt.(*ast.ProcDecl); ok {
-			g.procSigs[proc.Name] = proc.Params
-			g.collectNestedProcSigs(proc.Body)
+		switch s := stmt.(type) {
+		case *ast.ProcDecl:
+			g.procSigs[s.Name] = s.Params
+			g.collectNestedProcSigs(s.Body)
+		case *ast.FuncDecl:
+			g.procSigs[s.Name] = s.Params
+			g.collectNestedProcSigs(s.Body)
+		case *ast.SeqBlock:
+			g.collectNestedProcSigs(s.Statements)
+		case *ast.ParBlock:
+			g.collectNestedProcSigs(s.Statements)
+		case *ast.IfStatement:
+			for _, c := range s.Choices {
+				g.collectNestedProcSigs(c.Body)
+			}
+		case *ast.WhileLoop:
+			g.collectNestedProcSigs(s.Body)
+		case *ast.CaseStatement:
+			for _, ch := range s.Choices {
+				g.collectNestedProcSigs(ch.Body)
+			}
 		}
-		if fn, ok := stmt.(*ast.FuncDecl); ok {
-			g.procSigs[fn.Name] = fn.Params
+	}
+}
+
+// collectNestedProcSigsScoped registers nested proc/func signatures into procSigs
+// for the current scope. It saves old values into oldSigs so they can be restored
+// after the scope ends (preventing name collisions between same-named nested procs
+// in different parent procs).
+func (g *Generator) collectNestedProcSigsScoped(stmts []ast.Statement, oldSigs map[string][]ast.ProcParam) {
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case *ast.ProcDecl:
+			if _, saved := oldSigs[s.Name]; !saved {
+				oldSigs[s.Name] = g.procSigs[s.Name] // nil if not previously set
+			}
+			g.procSigs[s.Name] = s.Params
+			g.collectNestedProcSigsScoped(s.Body, oldSigs)
+		case *ast.FuncDecl:
+			if _, saved := oldSigs[s.Name]; !saved {
+				oldSigs[s.Name] = g.procSigs[s.Name]
+			}
+			g.procSigs[s.Name] = s.Params
+			g.collectNestedProcSigsScoped(s.Body, oldSigs)
+		case *ast.SeqBlock:
+			g.collectNestedProcSigsScoped(s.Statements, oldSigs)
+		case *ast.ParBlock:
+			g.collectNestedProcSigsScoped(s.Statements, oldSigs)
+		case *ast.IfStatement:
+			for _, c := range s.Choices {
+				g.collectNestedProcSigsScoped(c.Body, oldSigs)
+			}
+		case *ast.WhileLoop:
+			g.collectNestedProcSigsScoped(s.Body, oldSigs)
+		case *ast.CaseStatement:
+			for _, ch := range s.Choices {
+				g.collectNestedProcSigsScoped(ch.Body, oldSigs)
+			}
 		}
 	}
 }
@@ -659,6 +768,12 @@ func (g *Generator) exprNeedsMath(expr ast.Expression) bool {
 		}
 	case *ast.SliceExpr:
 		return g.exprNeedsMath(e.Array) || g.exprNeedsMath(e.Start) || g.exprNeedsMath(e.Length)
+	case *ast.ArrayLiteral:
+		for _, elem := range e.Elements {
+			if g.exprNeedsMath(elem) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -757,6 +872,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateAbbreviation(s)
 	case *ast.MultiAssignment:
 		g.generateMultiAssignment(s)
+	case *ast.RetypesDecl:
+		g.generateRetypesDecl(s)
 	}
 }
 
@@ -778,6 +895,10 @@ func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 	g.write(fmt.Sprintf("%s := ", goIdent(abbr.Name)))
 	g.generateExpression(abbr.Value)
 	g.write("\n")
+	// Suppress "declared and not used" for abbreviations inside function bodies
+	if g.nestingLevel > 0 {
+		g.writeLine(fmt.Sprintf("_ = %s", goIdent(abbr.Name)))
+	}
 }
 
 func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
@@ -1410,7 +1531,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		}
 	}
 	for _, p := range proc.Params {
-		if !p.IsVal && !p.IsChan && !p.IsChanArray && !p.IsOpenArray {
+		if !p.IsVal && !p.IsChan && !p.IsChanArray && !p.IsOpenArray && p.ArraySize == "" {
 			newRefParams[p.Name] = true
 		} else {
 			// Own param shadows any inherited ref param with same name
@@ -1431,6 +1552,26 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	}
 	g.refParams = newRefParams
 
+	// Scan proc body for RETYPES declarations that shadow parameters.
+	// When VAL INT X RETYPES X :, Go can't redeclare X in the same scope,
+	// so we rename the parameter (e.g. X → _rp_X) and let RETYPES declare the original name.
+	oldRenames := g.retypesRenames
+	g.retypesRenames = nil
+	paramNames := make(map[string]bool)
+	for _, p := range proc.Params {
+		paramNames[p.Name] = true
+	}
+	for _, stmt := range proc.Body {
+		if rd, ok := stmt.(*ast.RetypesDecl); ok {
+			if paramNames[rd.Source] && rd.Name == rd.Source {
+				if g.retypesRenames == nil {
+					g.retypesRenames = make(map[string]string)
+				}
+				g.retypesRenames[rd.Name] = "_rp_" + goIdent(rd.Name)
+			}
+		}
+	}
+
 	// Generate function signature
 	params := g.generateProcParams(proc.Params)
 	gName := goIdent(proc.Name)
@@ -1443,8 +1584,23 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	g.indent++
 	g.nestingLevel++
 
+	// Register nested proc/func signatures for this scope so that calls
+	// within this proc resolve to the correct (local) signature rather than
+	// a same-named proc from a different scope.
+	oldSigs := make(map[string][]ast.ProcParam)
+	g.collectNestedProcSigsScoped(proc.Body, oldSigs)
+
 	for _, stmt := range proc.Body {
 		g.generateStatement(stmt)
+	}
+
+	// Restore overwritten signatures
+	for name, params := range oldSigs {
+		if params == nil {
+			delete(g.procSigs, name)
+		} else {
+			g.procSigs[name] = params
+		}
 	}
 
 	g.nestingLevel--
@@ -1454,6 +1610,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 
 	// Restore previous context
 	g.refParams = oldRefParams
+	g.retypesRenames = oldRenames
 }
 
 func (g *Generator) generateProcParams(params []ast.ProcParam) string {
@@ -1467,11 +1624,9 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 		} else if p.IsOpenArray {
 			goType = "[]" + g.occamTypeToGo(p.Type)
 		} else if p.ArraySize != "" {
-			// Fixed-size array parameter: [n]TYPE
-			goType = "[" + p.ArraySize + "]" + g.occamTypeToGo(p.Type)
-			if !p.IsVal {
-				goType = "*" + goType
-			}
+			// Fixed-size array parameter: use slice for Go compatibility
+			// (occam [n]TYPE and []TYPE both map to Go slices)
+			goType = "[]" + g.occamTypeToGo(p.Type)
 		} else {
 			goType = g.occamTypeToGo(p.Type)
 			if !p.IsVal {
@@ -1479,7 +1634,11 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 				goType = "*" + goType
 			}
 		}
-		parts = append(parts, fmt.Sprintf("%s %s", goIdent(p.Name), goType))
+		pName := goIdent(p.Name)
+		if renamed, ok := g.retypesRenames[p.Name]; ok {
+			pName = renamed
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", pName, goType))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -1502,6 +1661,12 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 		return
 	}
 
+	// Handle CAUSEERROR
+	if call.Name == "CAUSEERROR" {
+		g.writeLine(`panic("CAUSEERROR")`)
+		return
+	}
+
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(goIdent(call.Name))
 	g.write("(")
@@ -1514,7 +1679,7 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 			g.write(", ")
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
-		// Channels and channel arrays are already reference types, so no & needed
+		// Channels, channel arrays, open arrays, and fixed-size arrays (mapped to slices) are already reference types
 		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray && !params[i].IsOpenArray && params[i].ArraySize == "" {
 			g.write("&")
 		}
@@ -1579,7 +1744,11 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 }
 
 func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
-	g.write(goIdent(call.Name))
+	if transpIntrinsics[call.Name] {
+		g.write("_" + call.Name)
+	} else {
+		g.write(goIdent(call.Name))
+	}
 	g.write("(")
 	params := g.procSigs[call.Name]
 	for i, arg := range call.Args {
@@ -1943,6 +2112,8 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 		g.write(")")
 	case *ast.MostExpr:
 		g.generateMostExpr(e)
+	case *ast.ArrayLiteral:
+		g.generateArrayLiteral(e)
 	}
 }
 
@@ -2004,4 +2175,306 @@ func (g *Generator) occamOpToGo(op string) string {
 	default:
 		return op // +, -, *, /, <, >, <=, >= are the same
 	}
+}
+
+// generateArrayLiteral emits a Go slice literal: []int{e1, e2, ...}
+func (g *Generator) generateArrayLiteral(al *ast.ArrayLiteral) {
+	g.write("[]int{")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.generateExpression(elem)
+	}
+	g.write("}")
+}
+
+// generateRetypesDecl emits code for a RETYPES declaration.
+// VAL INT X RETYPES X : — reinterpret float32/64 bits as int(s)
+// When source and target share the same name (shadowing a parameter), the parameter
+// has been renamed in the signature (e.g. X → _rp_X) so we can use := with the
+// original name to create a new variable.
+func (g *Generator) generateRetypesDecl(r *ast.RetypesDecl) {
+	gName := goIdent(r.Name)
+	gSource := goIdent(r.Source)
+	// If the parameter was renamed for RETYPES shadowing, use the renamed source
+	if renamed, ok := g.retypesRenames[r.Source]; ok {
+		gSource = renamed
+	}
+	if r.IsArray {
+		// VAL [2]INT X RETYPES X : — split float64 into two int32 words
+		tmpVar := fmt.Sprintf("_retmp%d", g.tmpCounter)
+		g.tmpCounter++
+		g.writeLine(fmt.Sprintf("%s := math.Float64bits(float64(%s))", tmpVar, gSource))
+		g.writeLine(fmt.Sprintf("%s := []int{int(int32(uint32(%s))), int(int32(uint32(%s >> 32)))}", gName, tmpVar, tmpVar))
+	} else {
+		// VAL INT X RETYPES X : — reinterpret float32 as int
+		g.writeLine(fmt.Sprintf("%s := int(int32(math.Float32bits(float32(%s))))", gName, gSource))
+	}
+}
+
+// containsIntrinsics checks if a statement tree contains transputer intrinsic calls.
+func (g *Generator) containsIntrinsics(stmt ast.Statement) bool {
+	return g.walkStatements(stmt, func(e ast.Expression) bool {
+		if fc, ok := e.(*ast.FuncCall); ok {
+			return transpIntrinsics[fc.Name]
+		}
+		return false
+	})
+}
+
+// containsRetypes checks if a statement tree contains RETYPES declarations.
+func (g *Generator) containsRetypes(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.RetypesDecl:
+		return true
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsRetypes(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsRetypes(inner) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		for _, inner := range s.Body {
+			if g.containsRetypes(inner) {
+				return true
+			}
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsRetypes(inner) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		for _, inner := range s.Body {
+			if g.containsRetypes(inner) {
+				return true
+			}
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.NestedIf != nil && g.containsRetypes(choice.NestedIf) {
+				return true
+			}
+			for _, inner := range choice.Body {
+				if g.containsRetypes(inner) {
+					return true
+				}
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			for _, inner := range choice.Body {
+				if g.containsRetypes(inner) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// walkStatements recursively walks a statement tree, applying fn to all expressions.
+// Returns true if fn returns true for any expression.
+func (g *Generator) walkStatements(stmt ast.Statement, fn func(ast.Expression) bool) bool {
+	switch s := stmt.(type) {
+	case *ast.Assignment:
+		return g.walkExpr(s.Value, fn) || g.walkExpr(s.Index, fn)
+	case *ast.MultiAssignment:
+		for _, v := range s.Values {
+			if g.walkExpr(v, fn) {
+				return true
+			}
+		}
+	case *ast.Abbreviation:
+		return g.walkExpr(s.Value, fn)
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.walkStatements(inner, fn) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.walkStatements(inner, fn) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		for _, inner := range s.Body {
+			if g.walkStatements(inner, fn) {
+				return true
+			}
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.walkStatements(inner, fn) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		if g.walkExpr(s.Condition, fn) {
+			return true
+		}
+		for _, inner := range s.Body {
+			if g.walkStatements(inner, fn) {
+				return true
+			}
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.NestedIf != nil && g.walkStatements(choice.NestedIf, fn) {
+				return true
+			}
+			if g.walkExpr(choice.Condition, fn) {
+				return true
+			}
+			for _, inner := range choice.Body {
+				if g.walkStatements(inner, fn) {
+					return true
+				}
+			}
+		}
+	case *ast.CaseStatement:
+		if g.walkExpr(s.Selector, fn) {
+			return true
+		}
+		for _, choice := range s.Choices {
+			for _, v := range choice.Values {
+				if g.walkExpr(v, fn) {
+					return true
+				}
+			}
+			for _, inner := range choice.Body {
+				if g.walkStatements(inner, fn) {
+					return true
+				}
+			}
+		}
+	case *ast.Send:
+		if g.walkExpr(s.Value, fn) {
+			return true
+		}
+		for _, v := range s.Values {
+			if g.walkExpr(v, fn) {
+				return true
+			}
+		}
+	case *ast.ProcCall:
+		for _, arg := range s.Args {
+			if g.walkExpr(arg, fn) {
+				return true
+			}
+		}
+	case *ast.AltBlock:
+		for _, c := range s.Cases {
+			for _, inner := range c.Body {
+				if g.walkStatements(inner, fn) {
+					return true
+				}
+			}
+		}
+	case *ast.VariantReceive:
+		for _, c := range s.Cases {
+			if c.Body != nil && g.walkStatements(c.Body, fn) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// walkExpr recursively walks an expression tree, applying fn.
+func (g *Generator) walkExpr(expr ast.Expression, fn func(ast.Expression) bool) bool {
+	if expr == nil {
+		return false
+	}
+	if fn(expr) {
+		return true
+	}
+	switch e := expr.(type) {
+	case *ast.BinaryExpr:
+		return g.walkExpr(e.Left, fn) || g.walkExpr(e.Right, fn)
+	case *ast.UnaryExpr:
+		return g.walkExpr(e.Right, fn)
+	case *ast.ParenExpr:
+		return g.walkExpr(e.Expr, fn)
+	case *ast.TypeConversion:
+		return g.walkExpr(e.Expr, fn)
+	case *ast.SizeExpr:
+		return g.walkExpr(e.Expr, fn)
+	case *ast.IndexExpr:
+		return g.walkExpr(e.Left, fn) || g.walkExpr(e.Index, fn)
+	case *ast.FuncCall:
+		for _, arg := range e.Args {
+			if g.walkExpr(arg, fn) {
+				return true
+			}
+		}
+	case *ast.SliceExpr:
+		return g.walkExpr(e.Array, fn) || g.walkExpr(e.Start, fn) || g.walkExpr(e.Length, fn)
+	case *ast.ArrayLiteral:
+		for _, elem := range e.Elements {
+			if g.walkExpr(elem, fn) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// emitIntrinsicHelpers writes the Go helper functions for transputer intrinsics.
+// These implement 32-bit transputer semantics using uint32/uint64 arithmetic.
+func (g *Generator) emitIntrinsicHelpers() {
+	g.writeLine("// Transputer intrinsic helper functions")
+	g.writeLine("func _LONGPROD(a, b, c int) (int, int) {")
+	g.writeLine("\tr := uint64(uint32(a))*uint64(uint32(b)) + uint64(uint32(c))")
+	g.writeLine("\treturn int(int32(uint32(r >> 32))), int(int32(uint32(r)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _LONGDIV(hi, lo, divisor int) (int, int) {")
+	g.writeLine("\tn := (uint64(uint32(hi)) << 32) | uint64(uint32(lo))")
+	g.writeLine("\td := uint64(uint32(divisor))")
+	g.writeLine("\tif d == 0 { panic(\"LONGDIV: division by zero\") }")
+	g.writeLine("\treturn int(int32(uint32(n / d))), int(int32(uint32(n % d)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _LONGSUM(a, b, carry int) (int, int) {")
+	g.writeLine("\tr := uint64(uint32(a)) + uint64(uint32(b)) + uint64(uint32(carry))")
+	g.writeLine("\treturn int(int32(uint32(r >> 32))), int(int32(uint32(r)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _LONGDIFF(a, b, borrow int) (int, int) {")
+	g.writeLine("\tr := uint64(uint32(a)) - uint64(uint32(b)) - uint64(uint32(borrow))")
+	g.writeLine("\tif uint32(a) >= uint32(b)+uint32(borrow) { return 0, int(int32(uint32(r))) }")
+	g.writeLine("\treturn 1, int(int32(uint32(r)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _NORMALISE(hi, lo int) (int, int, int) {")
+	g.writeLine("\tv := (uint64(uint32(hi)) << 32) | uint64(uint32(lo))")
+	g.writeLine("\tif v == 0 { return 64, 0, 0 }")
+	g.writeLine("\tn := bits.LeadingZeros64(v)")
+	g.writeLine("\tv <<= uint(n)")
+	g.writeLine("\treturn n, int(int32(uint32(v >> 32))), int(int32(uint32(v)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _SHIFTRIGHT(hi, lo, n int) (int, int) {")
+	g.writeLine("\tv := (uint64(uint32(hi)) << 32) | uint64(uint32(lo))")
+	g.writeLine("\tv >>= uint(uint32(n))")
+	g.writeLine("\treturn int(int32(uint32(v >> 32))), int(int32(uint32(v)))")
+	g.writeLine("}")
+	g.writeLine("")
+	g.writeLine("func _SHIFTLEFT(hi, lo, n int) (int, int) {")
+	g.writeLine("\tv := (uint64(uint32(hi)) << 32) | uint64(uint32(lo))")
+	g.writeLine("\tv <<= uint(uint32(n))")
+	g.writeLine("\treturn int(int32(uint32(v >> 32))), int(int32(uint32(v)))")
+	g.writeLine("}")
+	g.writeLine("")
 }

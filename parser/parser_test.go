@@ -2873,3 +2873,213 @@ func TestChannelDirAtCallSite(t *testing.T) {
 		t.Errorf("expected arg 1 = 'in', got %q", arg1.Value)
 	}
 }
+
+func TestUntypedValAbbreviation(t *testing.T) {
+	input := `VAL x IS 42 :
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if !abbr.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+	if abbr.Type != "" {
+		t.Errorf("expected empty type, got %q", abbr.Type)
+	}
+	if abbr.Name != "x" {
+		t.Errorf("expected name 'x', got %s", abbr.Name)
+	}
+	if abbr.Value == nil {
+		t.Fatal("expected non-nil Value")
+	}
+	lit, ok := abbr.Value.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral, got %T", abbr.Value)
+	}
+	if lit.Value != 42 {
+		t.Errorf("expected value 42, got %d", lit.Value)
+	}
+}
+
+func TestArrayLiteral(t *testing.T) {
+	input := `VAL x IS [1, 2, 3] :
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+
+	if abbr.Value == nil {
+		t.Fatal("expected non-nil Value")
+	}
+
+	arr, ok := abbr.Value.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("expected ArrayLiteral, got %T", abbr.Value)
+	}
+
+	if len(arr.Elements) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(arr.Elements))
+	}
+
+	for i, expected := range []int64{1, 2, 3} {
+		lit, ok := arr.Elements[i].(*ast.IntegerLiteral)
+		if !ok {
+			t.Fatalf("element %d: expected IntegerLiteral, got %T", i, arr.Elements[i])
+		}
+		if lit.Value != expected {
+			t.Errorf("element %d: expected %d, got %d", i, expected, lit.Value)
+		}
+	}
+}
+
+func TestRetypesDecl(t *testing.T) {
+	input := `VAL INT X RETYPES Y :
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	rt, ok := program.Statements[0].(*ast.RetypesDecl)
+	if !ok {
+		t.Fatalf("expected RetypesDecl, got %T", program.Statements[0])
+	}
+
+	if !rt.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+	if rt.TargetType != "INT" {
+		t.Errorf("expected TargetType 'INT', got %q", rt.TargetType)
+	}
+	if rt.Name != "X" {
+		t.Errorf("expected Name 'X', got %q", rt.Name)
+	}
+	if rt.Source != "Y" {
+		t.Errorf("expected Source 'Y', got %q", rt.Source)
+	}
+	if rt.IsArray {
+		t.Error("expected IsArray to be false")
+	}
+}
+
+func TestRetypesDeclArray(t *testing.T) {
+	input := `VAL [2]INT X RETYPES Y :
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	rt, ok := program.Statements[0].(*ast.RetypesDecl)
+	if !ok {
+		t.Fatalf("expected RetypesDecl, got %T", program.Statements[0])
+	}
+
+	if !rt.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+	if rt.TargetType != "INT" {
+		t.Errorf("expected TargetType 'INT', got %q", rt.TargetType)
+	}
+	if rt.Name != "X" {
+		t.Errorf("expected Name 'X', got %q", rt.Name)
+	}
+	if rt.Source != "Y" {
+		t.Errorf("expected Source 'Y', got %q", rt.Source)
+	}
+	if !rt.IsArray {
+		t.Error("expected IsArray to be true")
+	}
+	if rt.ArraySize == nil {
+		t.Fatal("expected non-nil ArraySize")
+	}
+	sizelit, ok := rt.ArraySize.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for ArraySize, got %T", rt.ArraySize)
+	}
+	if sizelit.Value != 2 {
+		t.Errorf("expected ArraySize 2, got %d", sizelit.Value)
+	}
+}
+
+func TestMultiLineBooleanExpression(t *testing.T) {
+	input := `PROC test()
+  INT x:
+  IF
+    TRUE AND
+      TRUE
+      x := 1
+    TRUE
+      x := 2
+:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	// Body should have VarDecl + IfStatement
+	if len(proc.Body) < 2 {
+		t.Fatalf("expected at least 2 body statements, got %d", len(proc.Body))
+	}
+
+	if _, ok := proc.Body[0].(*ast.VarDecl); !ok {
+		t.Errorf("expected VarDecl at index 0, got %T", proc.Body[0])
+	}
+
+	ifStmt, ok := proc.Body[1].(*ast.IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement at index 1, got %T", proc.Body[1])
+	}
+
+	if len(ifStmt.Choices) != 2 {
+		t.Fatalf("expected 2 choices, got %d", len(ifStmt.Choices))
+	}
+
+	// First choice condition should be a BinaryExpr (TRUE AND TRUE)
+	binExpr, ok := ifStmt.Choices[0].Condition.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr for first choice condition, got %T", ifStmt.Choices[0].Condition)
+	}
+	if binExpr.Operator != "AND" {
+		t.Errorf("expected operator 'AND', got %q", binExpr.Operator)
+	}
+}

@@ -612,3 +612,47 @@ func TestMultiAssignmentMixed(t *testing.T) {
 		t.Errorf("expected 'a, x[0] = 1, 2' in output, got:\n%s", output)
 	}
 }
+
+func TestArrayLiteralCodegen(t *testing.T) {
+	input := `VAL x IS [10, 20, 30] :
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "[]int{10, 20, 30}") {
+		t.Errorf("expected '[]int{10, 20, 30}' in output, got:\n%s", output)
+	}
+}
+
+func TestUntypedValCodegen(t *testing.T) {
+	input := `VAL x IS 42 :
+PROC dummy()
+  SKIP
+:
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "var x = 42") {
+		t.Errorf("expected 'var x = 42' in output, got:\n%s", output)
+	}
+}
+
+func TestCAUSEERROR(t *testing.T) {
+	input := `PROC main()
+  CAUSEERROR()
+:
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, `panic("CAUSEERROR")`) {
+		t.Errorf("expected 'panic(\"CAUSEERROR\")' in output, got:\n%s", output)
+	}
+}
+
+func TestGoIdentByteReserved(t *testing.T) {
+	input := `PROC main()
+  BYTE byte:
+  byte := 65
+:
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "_byte") {
+		t.Errorf("expected '_byte' in output, got:\n%s", output)
+	}
+}
