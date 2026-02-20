@@ -312,10 +312,14 @@ func (p *Parser) parseVarDeclOrAbbreviation() ast.Statement {
 	return decl
 }
 
-// parseAbbreviation parses a VAL abbreviation: VAL INT x IS expr:
-// Also handles VAL []BYTE x IS "string": (open array abbreviation)
+// parseAbbreviation parses VAL abbreviations:
+//   VAL INT x IS expr:          (typed VAL abbreviation)
+//   VAL []BYTE x IS "string":   (open array abbreviation)
+//   VAL x IS expr:              (untyped VAL abbreviation)
+//   VAL INT X RETYPES X :       (RETYPES declaration)
+//   VAL [n]INT X RETYPES X :    (array RETYPES declaration)
 // Current token is VAL.
-func (p *Parser) parseAbbreviation() *ast.Abbreviation {
+func (p *Parser) parseAbbreviation() ast.Statement {
 	token := p.curToken // VAL token
 
 	p.nextToken()
@@ -326,6 +330,39 @@ func (p *Parser) parseAbbreviation() *ast.Abbreviation {
 		isOpenArray = true
 		p.nextToken() // consume ]
 		p.nextToken() // move to type
+	}
+
+	// Check for [n]TYPE (fixed-size array, used in RETYPES)
+	isArray := false
+	var arraySize ast.Expression
+	if !isOpenArray && p.curTokenIs(lexer.LBRACKET) {
+		// Could be [n]TYPE name RETYPES ...
+		isArray = true
+		p.nextToken() // move past [
+		arraySize = p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+		p.nextToken() // move to type
+	}
+
+	// Check for untyped VAL abbreviation: VAL name IS expr :
+	// Detect: curToken is IDENT and peekToken is IS (no type keyword)
+	if !isOpenArray && !isArray && p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.IS) {
+		name := p.curToken.Literal
+		p.nextToken() // consume IS
+		p.nextToken() // move to expression
+		value := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+		return &ast.Abbreviation{
+			Token: token,
+			IsVal: true,
+			Type:  "",
+			Name:  name,
+			Value: value,
+		}
 	}
 
 	// Expect a type keyword
@@ -340,6 +377,27 @@ func (p *Parser) parseAbbreviation() *ast.Abbreviation {
 		return nil
 	}
 	name := p.curToken.Literal
+
+	// Check for RETYPES (instead of IS)
+	if p.peekTokenIs(lexer.RETYPES) {
+		p.nextToken() // consume RETYPES
+		if !p.expectPeek(lexer.IDENT) {
+			return nil
+		}
+		source := p.curToken.Literal
+		if !p.expectPeek(lexer.COLON) {
+			return nil
+		}
+		return &ast.RetypesDecl{
+			Token:      token,
+			IsVal:      true,
+			TargetType: typeName,
+			IsArray:    isArray,
+			ArraySize:  arraySize,
+			Name:       name,
+			Source:      source,
+		}
+	}
 
 	// Expect IS
 	if !p.expectPeek(lexer.IS) {
@@ -2589,34 +2647,60 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Right:    p.parseExpression(PREFIX),
 		}
 	case lexer.LBRACKET:
-		// Slice expression: [arr FROM start FOR length] or [arr FOR length]
+		// Could be: [arr FROM start FOR length], [arr FOR length], or [expr, expr, ...] array literal
 		lbracket := p.curToken
 		p.nextToken() // move past [
-		arrayExpr := p.parseExpression(LOWEST)
-		var startExpr ast.Expression
-		if p.peekTokenIs(lexer.FOR) {
-			// [arr FOR length] shorthand — start is 0
-			startExpr = &ast.IntegerLiteral{Token: lexer.Token{Type: lexer.INT, Literal: "0"}, Value: 0}
-		} else {
-			if !p.expectPeek(lexer.FROM) {
+		firstExpr := p.parseExpression(LOWEST)
+
+		if p.peekTokenIs(lexer.COMMA) {
+			// Array literal: [expr, expr, ...]
+			elements := []ast.Expression{firstExpr}
+			for p.peekTokenIs(lexer.COMMA) {
+				p.nextToken() // consume comma
+				p.nextToken() // move to next element
+				elements = append(elements, p.parseExpression(LOWEST))
+			}
+			if !p.expectPeek(lexer.RBRACKET) {
 				return nil
 			}
-			p.nextToken() // move past FROM
-			startExpr = p.parseExpression(LOWEST)
-		}
-		if !p.expectPeek(lexer.FOR) {
-			return nil
-		}
-		p.nextToken() // move past FOR
-		lengthExpr := p.parseExpression(LOWEST)
-		if !p.expectPeek(lexer.RBRACKET) {
-			return nil
-		}
-		left = &ast.SliceExpr{
-			Token:  lbracket,
-			Array:  arrayExpr,
-			Start:  startExpr,
-			Length: lengthExpr,
+			left = &ast.ArrayLiteral{
+				Token:    lbracket,
+				Elements: elements,
+			}
+		} else if p.peekTokenIs(lexer.RBRACKET) {
+			// Single-element array literal: [expr]
+			p.nextToken() // consume ]
+			left = &ast.ArrayLiteral{
+				Token:    lbracket,
+				Elements: []ast.Expression{firstExpr},
+			}
+		} else {
+			// Slice expression: [arr FROM start FOR length] or [arr FOR length]
+			var startExpr ast.Expression
+			if p.peekTokenIs(lexer.FOR) {
+				// [arr FOR length] shorthand — start is 0
+				startExpr = &ast.IntegerLiteral{Token: lexer.Token{Type: lexer.INT, Literal: "0"}, Value: 0}
+			} else {
+				if !p.expectPeek(lexer.FROM) {
+					return nil
+				}
+				p.nextToken() // move past FROM
+				startExpr = p.parseExpression(LOWEST)
+			}
+			if !p.expectPeek(lexer.FOR) {
+				return nil
+			}
+			p.nextToken() // move past FOR
+			lengthExpr := p.parseExpression(LOWEST)
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+			left = &ast.SliceExpr{
+				Token:  lbracket,
+				Array:  firstExpr,
+				Start:  startExpr,
+				Length: lengthExpr,
+			}
 		}
 	case lexer.SIZE_KW:
 		token := p.curToken

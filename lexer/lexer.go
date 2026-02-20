@@ -17,8 +17,13 @@ type Lexer struct {
 	pendingTokens []Token // tokens to emit before reading more input
 	atLineStart  bool
 
-	// Parenthesis depth: suppress INDENT/DEDENT/NEWLINE inside (...)
+	// Parenthesis/bracket depth: suppress INDENT/DEDENT/NEWLINE inside (...) and [...]
 	parenDepth int
+
+	// Last real token type for continuation detection.
+	// When the last token is a binary operator or :=, NEWLINE and INDENT/DEDENT
+	// are suppressed on the next line (multi-line expression continuation).
+	lastTokenType TokenType
 }
 
 func New(input string) *Lexer {
@@ -52,6 +57,15 @@ func (l *Lexer) peekChar() byte {
 }
 
 func (l *Lexer) NextToken() Token {
+	tok := l.nextTokenInner()
+	// Track last real token type for continuation detection
+	if tok.Type != NEWLINE && tok.Type != INDENT && tok.Type != DEDENT && tok.Type != EOF {
+		l.lastTokenType = tok.Type
+	}
+	return tok
+}
+
+func (l *Lexer) nextTokenInner() Token {
 	// Return any pending tokens first (from indentation processing)
 	if len(l.pendingTokens) > 0 {
 		tok := l.pendingTokens[0]
@@ -65,9 +79,10 @@ func (l *Lexer) NextToken() Token {
 		indent := l.measureIndent()
 		currentIndent := l.indentStack[len(l.indentStack)-1]
 
-		if l.parenDepth > 0 {
-			// Inside parentheses: suppress INDENT/DEDENT tokens
-			// (don't modify indentStack — resume normal tracking after close paren)
+		if l.parenDepth > 0 || isContinuationOp(l.lastTokenType) {
+			// Inside parentheses/brackets or after a continuation operator:
+			// suppress INDENT/DEDENT tokens
+			// (don't modify indentStack — resume normal tracking after)
 		} else if indent > currentIndent {
 			l.indentStack = append(l.indentStack, indent)
 			return Token{Type: INDENT, Literal: "", Line: l.line, Column: 1}
@@ -101,8 +116,12 @@ func (l *Lexer) NextToken() Token {
 		}
 		tok = l.newToken(RPAREN, l.ch)
 	case '[':
+		l.parenDepth++
 		tok = l.newToken(LBRACKET, l.ch)
 	case ']':
+		if l.parenDepth > 0 {
+			l.parenDepth--
+		}
 		tok = l.newToken(RBRACKET, l.ch)
 	case ',':
 		tok = l.newToken(COMMA, l.ch)
@@ -217,8 +236,9 @@ func (l *Lexer) NextToken() Token {
 				l.skipToEndOfLine()
 			}
 		}
-		if l.parenDepth > 0 {
-			// Inside parentheses: suppress NEWLINE, get next real token
+		if l.parenDepth > 0 || isContinuationOp(l.lastTokenType) {
+			// Inside parentheses/brackets or after a continuation operator:
+			// suppress NEWLINE, get next real token
 			return l.NextToken()
 		}
 		tok = Token{Type: NEWLINE, Literal: "\\n", Line: l.line, Column: l.column}
@@ -390,6 +410,22 @@ func isDigit(ch byte) bool {
 
 func isHexDigit(ch byte) bool {
 	return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
+}
+
+// isContinuationOp returns true if the given token type, when appearing at the
+// end of a line, indicates that the expression continues on the next line.
+// This causes NEWLINE and INDENT/DEDENT suppression on the continuation line.
+func isContinuationOp(t TokenType) bool {
+	switch t {
+	case AND, OR,
+		PLUS, MINUS, MULTIPLY, DIVIDE, MODULO,
+		PLUS_KW, MINUS_KW, TIMES,
+		EQ, NEQ, LT, GT, LE, GE,
+		BITAND, BITOR, BITXOR, LSHIFT, RSHIFT,
+		ASSIGN, AFTER:
+		return true
+	}
+	return false
 }
 
 // Tokenize returns all tokens from the input

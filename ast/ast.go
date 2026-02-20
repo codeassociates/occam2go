@@ -494,3 +494,27 @@ type Abbreviation struct {
 
 func (a *Abbreviation) statementNode()       {}
 func (a *Abbreviation) TokenLiteral() string { return a.Token.Literal }
+
+// ArrayLiteral represents an array literal expression: [expr1, expr2, ...]
+type ArrayLiteral struct {
+	Token    lexer.Token  // the [ token
+	Elements []Expression // the elements
+}
+
+func (al *ArrayLiteral) expressionNode()      {}
+func (al *ArrayLiteral) TokenLiteral() string { return al.Token.Literal }
+
+// RetypesDecl represents a RETYPES declaration:
+// VAL INT X RETYPES X : or VAL [2]INT X RETYPES X :
+type RetypesDecl struct {
+	Token      lexer.Token // the VAL token
+	IsVal      bool        // always true for now (VAL ... RETYPES ...)
+	TargetType string      // "INT", "REAL32", etc.
+	IsArray    bool        // true for [n]TYPE
+	ArraySize  Expression  // array size when IsArray
+	Name       string      // target variable name
+	Source     string      // source variable name
+}
+
+func (r *RetypesDecl) statementNode()       {}
+func (r *RetypesDecl) TokenLiteral() string { return r.Token.Literal }

@@ -20,7 +20,7 @@
 - **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive and `[]CHAN OF TYPE` proc params
 - **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only); direction annotations at call sites (`out!`, `in?`) accepted and ignored
 - **Timers** — `TIMER tim:` with reads and `AFTER` expressions
-- **Abbreviations** — `VAL INT x IS 1:`, `INT y IS z:` — named constants and aliases
+- **Abbreviations** — `VAL INT x IS 1:`, `INT y IS z:`, untyped `VAL x IS expr:` — named constants and aliases
 - **INITIAL declarations** — `INITIAL INT x IS 42:` — mutable variables with initial values
 - **Byte literals** — `'A'`, `'0'` with occam escape sequences (`*n`, `*c`, `*t`)
 - **Hex integer literals** — `#FF`, `#80000000`
@@ -49,7 +49,9 @@
 - **MOSTNEG/MOSTPOS** — Type min/max constants for INT, BYTE, REAL32, REAL64
 - **SIZE operator** — `SIZE arr`, `SIZE "str"` maps to `len()`
 - **Array slices** — `[arr FROM n FOR m]` with slice assignment
+- **Array literals** — `[1, 2, 3]` — inline array/table expressions
 - **Multi-assignment** — `a, b := f(...)` including indexed targets like `x[0], x[1] := x[1], x[0]`
+- **Multi-line expression continuation** — Binary operators and `:=` at end of line continue expression on next line
 
 ### Protocols
 - **Simple** — `PROTOCOL SIG IS INT` (type alias)
@@ -58,6 +60,11 @@
 
 ### Records
 - **RECORD** — Struct types with field access via bracket syntax (`p[x]`)
+
+### Type Reinterpretation & Intrinsics
+- **RETYPES** — Bit-level type reinterpretation (`VAL INT X RETYPES X :` for float32→int, `VAL [2]INT X RETYPES X :` for float64→int pair)
+- **Transputer intrinsics** — `LONGPROD`, `LONGDIV`, `LONGSUM`, `LONGDIFF`, `NORMALISE`, `SHIFTLEFT`, `SHIFTRIGHT` — extended-precision arithmetic as Go helper functions
+- **CAUSEERROR** — Error-raising primitive, maps to `panic("CAUSEERROR")`
 
 ### Preprocessor
 - **`#IF` / `#ELSE` / `#ENDIF`** — Conditional compilation with `TRUE`, `FALSE`, `DEFINED()`, `NOT`, equality
@@ -89,8 +96,5 @@
 | **PRI ALT / PRI PAR** | Priority variants of ALT and PAR. |
 | **PLACED PAR** | Assigning processes to specific hardware. |
 | **PORT OF** | Hardware port mapping. |
-| **`RETYPES`** | Type punning / reinterpret cast (`VAL INT X RETYPES X :`). Used in float_io.occ. |
-| **`CAUSEERROR ()`** | Built-in error-raising primitive. Used in float_io.occ. |
-| **Transputer intrinsics** | `LONGPROD`, `LONGDIV`, `LONGSUM`, `LONGDIFF`, `NORMALISE`, `SHIFTLEFT`, `SHIFTRIGHT`. Used in float_io.occ. |
 | **`VAL []BYTE` abbreviations** | `VAL []BYTE cmap IS "0123456789ABCDEF":` — named string constants. |
 | **`#PRAGMA DEFINED`** | Compiler hint to suppress definedness warnings. Can be ignored. |

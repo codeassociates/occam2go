@@ -90,6 +90,7 @@ const (
 	MOSTNEG_KW
 	MOSTPOS_KW
 	INITIAL
+	RETYPES  // RETYPES (bit-level type reinterpretation)
 	PLUS_KW  // PLUS (modular addition keyword, distinct from + symbol)
 	MINUS_KW // MINUS (modular subtraction keyword, distinct from - symbol)
 	TIMES    // TIMES (modular multiplication keyword)
@@ -178,6 +179,7 @@ var tokenNames = map[TokenType]string{
 	MOSTNEG_KW: "MOSTNEG",
 	MOSTPOS_KW: "MOSTPOS",
 	INITIAL:    "INITIAL",
+	RETYPES:    "RETYPES",
 	PLUS_KW:    "PLUS",
 	MINUS_KW:   "MINUS",
 	TIMES:      "TIMES",
@@ -224,6 +226,7 @@ var keywords = map[string]TokenType{
 	"MOSTNEG":  MOSTNEG_KW,
 	"MOSTPOS":  MOSTPOS_KW,
 	"INITIAL":  INITIAL,
+	"RETYPES":  RETYPES,
 	"PLUS":     PLUS_KW,
 	"MINUS":    MINUS_KW,
 	"TIMES":    TIMES,
