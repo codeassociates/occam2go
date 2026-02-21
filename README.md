@@ -431,7 +431,7 @@ This outputs:
 
 ### Running Programs with the Course Module
 
-The KRoC [course module](https://www.cs.kent.ac.uk/projects/ofa/kroc/) is a standard occam library providing I/O utilities (`out.string`, `out.int`, `out.repeat`, etc.) for character-level communication over byte channels. The transpiler fully supports it.
+The KRoC [course module](https://github.com/concurrency/kroc/tree/master/modules/course) is a standard occam library providing I/O utilities (`out.string`, `out.int`, `out.repeat`, etc.) for character-level communication over byte channels. The transpiler fully supports it.
 
 Occam programs that follow the standard entry point pattern — a PROC with three `CHAN BYTE` parameters `(keyboard?, screen!, error!)` — automatically get a generated `main()` that wires stdin, stdout, and stderr to channels.
 
