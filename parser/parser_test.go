@@ -782,6 +782,72 @@ func TestFuncDeclIS(t *testing.T) {
 	}
 }
 
+func TestInlineFuncDecl(t *testing.T) {
+	input := `INT INLINE FUNCTION seconds(VAL INT s)
+  INT ticks:
+  VALOF
+    ticks := s * 1000000
+    RESULT ticks
+:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	fn, ok := program.Statements[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
+	}
+
+	if len(fn.ReturnTypes) != 1 || fn.ReturnTypes[0] != "INT" {
+		t.Errorf("expected return types [INT], got %v", fn.ReturnTypes)
+	}
+
+	if fn.Name != "seconds" {
+		t.Errorf("expected name 'seconds', got %s", fn.Name)
+	}
+
+	if len(fn.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(fn.Params))
+	}
+
+	if fn.Params[0].Name != "s" || fn.Params[0].Type != "INT" || !fn.Params[0].IsVal {
+		t.Errorf("expected VAL INT s, got %+v", fn.Params[0])
+	}
+}
+
+func TestInlineFuncDeclIS(t *testing.T) {
+	input := `INT INLINE FUNCTION double(VAL INT x)
+  IS x * 2
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	fn, ok := program.Statements[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Statements[0])
+	}
+
+	if fn.Name != "double" {
+		t.Errorf("expected name 'double', got %s", fn.Name)
+	}
+
+	if len(fn.ResultExprs) != 1 {
+		t.Fatalf("expected 1 result expression, got %d", len(fn.ResultExprs))
+	}
+}
+
 func TestFuncDeclValof(t *testing.T) {
 	input := `INT FUNCTION max(VAL INT a, VAL INT b)
   INT result:

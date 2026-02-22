@@ -91,6 +91,7 @@ const (
 	MOSTPOS_KW
 	INITIAL
 	RETYPES  // RETYPES (bit-level type reinterpretation)
+	INLINE   // INLINE (function modifier, ignored for transpilation)
 	PLUS_KW  // PLUS (modular addition keyword, distinct from + symbol)
 	MINUS_KW // MINUS (modular subtraction keyword, distinct from - symbol)
 	TIMES    // TIMES (modular multiplication keyword)
@@ -180,6 +181,7 @@ var tokenNames = map[TokenType]string{
 	MOSTPOS_KW: "MOSTPOS",
 	INITIAL:    "INITIAL",
 	RETYPES:    "RETYPES",
+	INLINE:     "INLINE",
 	PLUS_KW:    "PLUS",
 	MINUS_KW:   "MINUS",
 	TIMES:      "TIMES",
@@ -227,6 +229,7 @@ var keywords = map[string]TokenType{
 	"MOSTPOS":  MOSTPOS_KW,
 	"INITIAL":  INITIAL,
 	"RETYPES":  RETYPES,
+	"INLINE":   INLINE,
 	"PLUS":     PLUS_KW,
 	"MINUS":    MINUS_KW,
 	"TIMES":    TIMES,
