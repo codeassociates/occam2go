@@ -165,7 +165,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseAbbreviation()
 	case lexer.INITIAL:
 		return p.parseInitialDecl()
-	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE,
+		lexer.INT16_TYPE, lexer.INT32_TYPE, lexer.INT64_TYPE:
 		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) || p.peekTokenIs(lexer.COMMA) || p.peekTokenIs(lexer.INLINE) {
 			return p.parseFuncDecl()
 		}
@@ -1650,7 +1651,8 @@ func (p *Parser) parseAltCases() []ast.AltCase {
 
 func (p *Parser) isAltDeclStart() bool {
 	switch p.curToken.Type {
-	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE,
+		lexer.INT16_TYPE, lexer.INT32_TYPE, lexer.INT64_TYPE:
 		return true
 	case lexer.VAL:
 		return true
@@ -1979,7 +1981,8 @@ procBodyDone:
 func isTypeToken(t lexer.TokenType) bool {
 	return t == lexer.INT_TYPE || t == lexer.BYTE_TYPE ||
 		t == lexer.BOOL_TYPE || t == lexer.REAL_TYPE ||
-		t == lexer.REAL32_TYPE || t == lexer.REAL64_TYPE
+		t == lexer.REAL32_TYPE || t == lexer.REAL64_TYPE ||
+		t == lexer.INT16_TYPE || t == lexer.INT32_TYPE || t == lexer.INT64_TYPE
 }
 
 func (p *Parser) parseProcParams() []ast.ProcParam {
@@ -2794,7 +2797,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		// Expect a type name next
 		if !p.peekTokenIs(lexer.INT_TYPE) && !p.peekTokenIs(lexer.BYTE_TYPE) &&
 			!p.peekTokenIs(lexer.BOOL_TYPE) && !p.peekTokenIs(lexer.REAL_TYPE) &&
-			!p.peekTokenIs(lexer.REAL32_TYPE) && !p.peekTokenIs(lexer.REAL64_TYPE) {
+			!p.peekTokenIs(lexer.REAL32_TYPE) && !p.peekTokenIs(lexer.REAL64_TYPE) &&
+			!p.peekTokenIs(lexer.INT16_TYPE) && !p.peekTokenIs(lexer.INT32_TYPE) && !p.peekTokenIs(lexer.INT64_TYPE) {
 			p.addError(fmt.Sprintf("expected type after %s, got %s", token.Literal, p.peekToken.Type))
 			return nil
 		}
@@ -2804,7 +2808,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			ExprType: p.curToken.Literal,
 			IsNeg:    isNeg,
 		}
-	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE,
+		lexer.INT16_TYPE, lexer.INT32_TYPE, lexer.INT64_TYPE:
 		token := p.curToken
 		p.nextToken()
 		left = &ast.TypeConversion{

@@ -13,7 +13,7 @@
 - **STOP** — Error + deadlock
 
 ### Data Types & Declarations
-- **INT, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (REAL/REAL64 map to float64, REAL32 maps to float32)
+- **INT, INT16, INT32, INT64, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (INT16/32/64 map to int16/32/64, REAL/REAL64 map to float64, REAL32 maps to float32)
 - **Variable declarations** — `INT x, y, z:`
 - **Arrays** — `[n]TYPE arr:` with index expressions
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`); `CHAN BYTE` shorthand (without `OF`)
@@ -45,9 +45,9 @@
 - **Parenthesized expressions**
 - **Array indexing** — `arr[i]`, `arr[expr]`
 - **String literals** — Double-quoted strings
-- **Type conversions** — `INT expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`
+- **Type conversions** — `INT expr`, `INT16 expr`, `INT32 expr`, `INT64 expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`
 - **Checked arithmetic** — `PLUS`, `MINUS`, `TIMES` — modular (wrapping) operators
-- **MOSTNEG/MOSTPOS** — Type min/max constants for INT, BYTE, REAL32, REAL64
+- **MOSTNEG/MOSTPOS** — Type min/max constants for INT, INT16, INT32, INT64, BYTE, REAL32, REAL64
 - **SIZE operator** — `SIZE arr`, `SIZE "str"` maps to `len()`
 - **Array slices** — `[arr FROM n FOR m]` with slice assignment
 - **Array literals** — `[1, 2, 3]` — inline array/table expressions

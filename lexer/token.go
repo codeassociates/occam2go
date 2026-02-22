@@ -80,6 +80,9 @@ const (
 	REAL_TYPE
 	REAL32_TYPE
 	REAL64_TYPE
+	INT16_TYPE
+	INT32_TYPE
+	INT64_TYPE
 	TIMER
 	AFTER
 	VAL
@@ -170,6 +173,9 @@ var tokenNames = map[TokenType]string{
 	REAL_TYPE:   "REAL",
 	REAL32_TYPE: "REAL32",
 	REAL64_TYPE: "REAL64",
+	INT16_TYPE:  "INT16",
+	INT32_TYPE:  "INT32",
+	INT64_TYPE:  "INT64",
 	TIMER:       "TIMER",
 	AFTER:    "AFTER",
 	VAL:       "VAL",
@@ -218,6 +224,9 @@ var keywords = map[string]TokenType{
 	"REAL":   REAL_TYPE,
 	"REAL32": REAL32_TYPE,
 	"REAL64": REAL64_TYPE,
+	"INT16":  INT16_TYPE,
+	"INT32":  INT32_TYPE,
+	"INT64":  INT64_TYPE,
 	"TIMER":  TIMER,
 	"AFTER": AFTER,
 	"VAL":      VAL,

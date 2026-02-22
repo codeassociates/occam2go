@@ -931,6 +931,24 @@ func (g *Generator) generateMostExpr(e *ast.MostExpr) {
 		} else {
 			g.write("math.MaxInt")
 		}
+	case "INT16":
+		if e.IsNeg {
+			g.write("math.MinInt16")
+		} else {
+			g.write("math.MaxInt16")
+		}
+	case "INT32":
+		if e.IsNeg {
+			g.write("math.MinInt32")
+		} else {
+			g.write("math.MaxInt32")
+		}
+	case "INT64":
+		if e.IsNeg {
+			g.write("math.MinInt64")
+		} else {
+			g.write("math.MaxInt64")
+		}
 	case "BYTE":
 		if e.IsNeg {
 			g.write("0")
@@ -1403,6 +1421,12 @@ func (g *Generator) occamTypeToGoBase(occamType string) string {
 	switch occamType {
 	case "INT":
 		return "int"
+	case "INT16":
+		return "int16"
+	case "INT32":
+		return "int32"
+	case "INT64":
+		return "int64"
 	case "BYTE":
 		return "byte"
 	case "BOOL":
@@ -1422,6 +1446,12 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 	switch occamType {
 	case "INT":
 		return "int"
+	case "INT16":
+		return "int16"
+	case "INT32":
+		return "int32"
+	case "INT64":
+		return "int64"
 	case "BYTE":
 		return "byte"
 	case "BOOL":
