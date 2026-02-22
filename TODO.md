@@ -33,6 +33,7 @@
 - **Multi-result FUNCTIONs** — `INT, INT FUNCTION f(...)` returning multiple values via `RESULT a, b`
 - **Nested PROCs/FUNCTIONs** — Local definitions inside a PROC body, compiled as Go closures
 - **KRoC-style colon terminators** — Optional `:` at end of PROC/FUNCTION body
+- **INLINE modifier** — `INT INLINE FUNCTION f(...)` — accepted and ignored (optimization hint only)
 - **Built-in print** — `print.int`, `print.bool`, `print.string`, `print.newline`
 
 ### Expressions & Operators

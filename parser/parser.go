@@ -166,7 +166,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.INITIAL:
 		return p.parseInitialDecl()
 	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
-		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) || p.peekTokenIs(lexer.COMMA) {
+		if p.peekTokenIs(lexer.FUNCTION) || p.peekTokenIs(lexer.FUNC) || p.peekTokenIs(lexer.COMMA) || p.peekTokenIs(lexer.INLINE) {
 			return p.parseFuncDecl()
 		}
 		return p.parseVarDeclOrAbbreviation()
@@ -2169,6 +2169,11 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.nextToken() // consume comma
 		p.nextToken() // move to next type
 		fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
+	}
+
+	// Skip INLINE modifier if present (optimization hint, ignored for transpilation)
+	if p.peekTokenIs(lexer.INLINE) {
+		p.nextToken()
 	}
 
 	// Consume FUNCTION keyword
