@@ -442,12 +442,16 @@ Occam programs that follow the standard entry point pattern — a PROC with thre
 # 2. Build the transpiler
 go build -o occam2go
 
-# 3. Transpile an example that uses the course module
+# 3. Generate the course module file from the KRoC SConscript (one-time setup)
+./occam2go gen-module -o kroc/modules/course/libsrc/course.module \
+                         kroc/modules/course/libsrc/SConscript
+
+# 4. Transpile an example that uses the course module
 ./occam2go -I kroc/modules/course/libsrc \
            -D TARGET.BITS.PER.WORD=32     \
            -o hello.go examples/course_hello.occ
 
-# 4. Run it
+# 5. Run it
 go run hello.go
 ```
 
