@@ -305,6 +305,9 @@ func TestTypeConversion(t *testing.T) {
 		{"x := BOOL flag\n", "x = bool(flag)"},
 		{"x := REAL32 y\n", "x = float32(y)"},
 		{"x := REAL64 y\n", "x = float64(y)"},
+		{"x := INT16 y\n", "x = int16(y)"},
+		{"x := INT32 y\n", "x = int32(y)"},
+		{"x := INT64 y\n", "x = int64(y)"},
 	}
 
 	for _, tt := range tests {
@@ -328,6 +331,12 @@ func TestMostNegMostPos(t *testing.T) {
 		{"x := MOSTPOS REAL32\n", "x = math.MaxFloat32"},
 		{"x := MOSTNEG REAL64\n", "x = -math.MaxFloat64"},
 		{"x := MOSTPOS REAL64\n", "x = math.MaxFloat64"},
+		{"x := MOSTNEG INT16\n", "x = math.MinInt16"},
+		{"x := MOSTPOS INT16\n", "x = math.MaxInt16"},
+		{"x := MOSTNEG INT32\n", "x = math.MinInt32"},
+		{"x := MOSTPOS INT32\n", "x = math.MaxInt32"},
+		{"x := MOSTNEG INT64\n", "x = math.MinInt64"},
+		{"x := MOSTPOS INT64\n", "x = math.MaxInt64"},
 	}
 
 	for _, tt := range tests {

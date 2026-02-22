@@ -400,3 +400,93 @@ func TestE2E_CheckedArithmeticWrapping(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_Int16VarDeclAndConversion(t *testing.T) {
+	occam := `SEQ
+  INT16 x:
+  x := 1000
+  INT y:
+  y := INT x
+  print.int(y)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1000\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Int32VarDeclAndConversion(t *testing.T) {
+	occam := `SEQ
+  INT32 x:
+  x := 100000
+  INT y:
+  y := INT x
+  print.int(y)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "100000\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Int64VarDeclAndConversion(t *testing.T) {
+	occam := `SEQ
+  INT64 x:
+  x := 123456789
+  INT y:
+  y := INT x
+  print.int(y)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "123456789\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostNegMostPosInt16(t *testing.T) {
+	occam := `SEQ
+  INT16 x:
+  x := MOSTNEG INT16
+  print.int(INT x)
+  x := MOSTPOS INT16
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-32768\n32767\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MostNegMostPosInt32(t *testing.T) {
+	occam := `SEQ
+  INT32 x:
+  x := MOSTNEG INT32
+  print.int(INT x)
+  x := MOSTPOS INT32
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-2147483648\n2147483647\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Int16TypeConversionFromInt(t *testing.T) {
+	occam := `SEQ
+  INT n:
+  n := 42
+  INT16 x:
+  x := INT16 n
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

@@ -3312,3 +3312,95 @@ func TestAltReplicatorWithAbbreviation(t *testing.T) {
 		t.Errorf("expected variable 'any', got %q", c.Variable)
 	}
 }
+
+func TestInt16Int32Int64VarDecl(t *testing.T) {
+	types := []struct {
+		input    string
+		expected string
+	}{
+		{"INT16 x:\n", "INT16"},
+		{"INT32 x:\n", "INT32"},
+		{"INT64 x:\n", "INT64"},
+	}
+	for _, tt := range types {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("for %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+		decl, ok := program.Statements[0].(*ast.VarDecl)
+		if !ok {
+			t.Fatalf("for %q: expected VarDecl, got %T", tt.input, program.Statements[0])
+		}
+		if decl.Type != tt.expected {
+			t.Errorf("for %q: expected type %s, got %s", tt.input, tt.expected, decl.Type)
+		}
+	}
+}
+
+func TestInt16Int32Int64TypeConversion(t *testing.T) {
+	types := []struct {
+		input    string
+		convType string
+	}{
+		{"x := INT16 y\n", "INT16"},
+		{"x := INT32 y\n", "INT32"},
+		{"x := INT64 y\n", "INT64"},
+	}
+	for _, tt := range types {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("for %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("for %q: expected Assignment, got %T", tt.input, program.Statements[0])
+		}
+		conv, ok := assign.Value.(*ast.TypeConversion)
+		if !ok {
+			t.Fatalf("for %q: expected TypeConversion, got %T", tt.input, assign.Value)
+		}
+		if conv.TargetType != tt.convType {
+			t.Errorf("for %q: expected target type %s, got %s", tt.input, tt.convType, conv.TargetType)
+		}
+	}
+}
+
+func TestMostNegMostPosInt16Int32Int64(t *testing.T) {
+	types := []string{"INT16", "INT32", "INT64"}
+	for _, typ := range types {
+		for _, kw := range []string{"MOSTNEG", "MOSTPOS"} {
+			input := "x := " + kw + " " + typ + "\n"
+			l := lexer.New(input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			if len(program.Statements) != 1 {
+				t.Fatalf("for %q: expected 1 statement, got %d", input, len(program.Statements))
+			}
+			assign, ok := program.Statements[0].(*ast.Assignment)
+			if !ok {
+				t.Fatalf("for %q: expected Assignment, got %T", input, program.Statements[0])
+			}
+			most, ok := assign.Value.(*ast.MostExpr)
+			if !ok {
+				t.Fatalf("for %q: expected MostExpr, got %T", input, assign.Value)
+			}
+			if most.ExprType != typ {
+				t.Errorf("for %q: expected type %s, got %s", input, typ, most.ExprType)
+			}
+			expectedNeg := kw == "MOSTNEG"
+			if most.IsNeg != expectedNeg {
+				t.Errorf("for %q: expected IsNeg=%v, got %v", input, expectedNeg, most.IsNeg)
+			}
+		}
+	}
+}
