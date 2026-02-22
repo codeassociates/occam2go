@@ -1,6 +1,11 @@
 // Package modgen generates .module files from KRoC SConscript build files.
-// It parses the Python-based SConscript to extract source file lists and
-// OccamLibrary calls, then produces an occam module file with include guards.
+// It uses regex-based pattern matching to extract Split('''...''') variable
+// assignments and OccamLibrary() calls, then produces an occam module file
+// with include guards.
+//
+// Note: This does not execute the Python code in SConscript files, so it only
+// works with simple, declarative SConscript files. Files that use Python
+// control flow (loops, conditionals, etc.) are not supported.
 package modgen
 
 import (
