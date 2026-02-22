@@ -51,7 +51,7 @@ Six packages, one pipeline:
    - `codegen_test.go` — Unit tests (transpile, check output strings)
    - `e2e_test.go` — End-to-end tests (transpile → `go build` → execute → check stdout)
 
-6. **`modgen/`** — Generates `.module` files from KRoC SConscript build files. Parses Python-based SConscript to extract source lists and `OccamLibrary` calls.
+6. **`modgen/`** — Generates `.module` files from KRoC SConscript build files. Uses regex-based pattern matching (not Python execution) to extract `Split('''...''')` source lists and `OccamLibrary` calls. Only works with simple, declarative SConscript files; files using Python control flow (loops, conditionals) are not supported.
    - `modgen.go` — SConscript parser and module file generator
 
 7. **`main.go`** — CLI entry point wiring the pipeline together

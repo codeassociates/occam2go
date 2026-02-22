@@ -404,7 +404,7 @@ A working example is provided in `examples/include_demo.occ` with `examples/math
 
 ### Generating Module Files from KRoC SConscript
 
-The KRoC project defines module composition in SConscript (Python) build files. The `gen-module` subcommand parses these to generate `.module` files:
+The KRoC project defines module composition in SConscript (Python) build files. The `gen-module` subcommand extracts source file lists from these to generate `.module` files:
 
 ```bash
 # Clone the KRoC repository (one-time setup)
@@ -413,6 +413,8 @@ The KRoC project defines module composition in SConscript (Python) build files. 
 # Generate a module file from SConscript
 ./occam2go gen-module kroc/modules/course/libsrc/SConscript
 ```
+
+**Limitation:** `gen-module` uses regex-based pattern matching to extract `Split('''...''')` variable assignments and `OccamLibrary()` calls from SConscript files. It does not execute the Python code. This means it works with simple, declarative SConscript files (like `modules/course/libsrc/SConscript`) but cannot handle files that rely on Python control flow such as loops or conditionals (like the top-level `modules/course/SConscript`).
 
 This outputs:
 ```
