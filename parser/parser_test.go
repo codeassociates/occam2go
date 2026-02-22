@@ -3188,3 +3188,127 @@ func TestMultiLineBooleanExpression(t *testing.T) {
 		t.Errorf("expected operator 'AND', got %q", binExpr.Operator)
 	}
 }
+
+func TestAltReplicator(t *testing.T) {
+	input := `ALT i = 0 FOR n
+  BYTE ch:
+  in[i] ? ch
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if alt.Replicator == nil {
+		t.Fatal("expected replicator, got nil")
+	}
+
+	if alt.Replicator.Variable != "i" {
+		t.Errorf("expected replicator variable 'i', got %q", alt.Replicator.Variable)
+	}
+
+	startLit, ok := alt.Replicator.Start.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("expected IntegerLiteral for start, got %T", alt.Replicator.Start)
+	}
+	if startLit.Value != 0 {
+		t.Errorf("expected start 0, got %d", startLit.Value)
+	}
+
+	countIdent, ok := alt.Replicator.Count.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("expected Identifier for count, got %T", alt.Replicator.Count)
+	}
+	if countIdent.Value != "n" {
+		t.Errorf("expected count 'n', got %q", countIdent.Value)
+	}
+
+	if len(alt.Cases) != 1 {
+		t.Fatalf("expected 1 case, got %d", len(alt.Cases))
+	}
+
+	c := alt.Cases[0]
+	if len(c.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(c.Declarations))
+	}
+	vd, ok := c.Declarations[0].(*ast.VarDecl)
+	if !ok {
+		t.Fatalf("expected VarDecl, got %T", c.Declarations[0])
+	}
+	if vd.Type != "BYTE" {
+		t.Errorf("expected type 'BYTE', got %q", vd.Type)
+	}
+	if len(vd.Names) != 1 || vd.Names[0] != "ch" {
+		t.Errorf("expected name 'ch', got %v", vd.Names)
+	}
+
+	if c.Channel != "in" {
+		t.Errorf("expected channel 'in', got %q", c.Channel)
+	}
+	if c.ChannelIndex == nil {
+		t.Fatal("expected channel index, got nil")
+	}
+	if c.Variable != "ch" {
+		t.Errorf("expected variable 'ch', got %q", c.Variable)
+	}
+}
+
+func TestAltReplicatorWithAbbreviation(t *testing.T) {
+	input := `ALT j = 0 FOR s
+  VAL INT X IS (j + 1):
+  INT any:
+  in[X] ? any
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if alt.Replicator == nil {
+		t.Fatal("expected replicator, got nil")
+	}
+
+	c := alt.Cases[0]
+	if len(c.Declarations) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(c.Declarations))
+	}
+
+	abbr, ok := c.Declarations[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", c.Declarations[0])
+	}
+	if abbr.Name != "X" {
+		t.Errorf("expected abbreviation name 'X', got %q", abbr.Name)
+	}
+
+	vd, ok := c.Declarations[1].(*ast.VarDecl)
+	if !ok {
+		t.Fatalf("expected VarDecl, got %T", c.Declarations[1])
+	}
+	if vd.Type != "INT" || vd.Names[0] != "any" {
+		t.Errorf("expected INT any, got %s %v", vd.Type, vd.Names)
+	}
+
+	if c.Channel != "in" {
+		t.Errorf("expected channel 'in', got %q", c.Channel)
+	}
+	if c.Variable != "any" {
+		t.Errorf("expected variable 'any', got %q", c.Variable)
+	}
+}

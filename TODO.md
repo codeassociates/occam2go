@@ -8,7 +8,7 @@
 - **IF** — Multi-branch conditionals, maps to if/else if chains, with replicators; supports multi-statement bodies (declarations scoped before process)
 - **WHILE** — Loops, maps to Go `for` loops; supports multi-statement bodies
 - **CASE** — Pattern matching with multiple cases and ELSE branch; supports multi-statement bodies
-- **ALT** — Channel alternation, maps to Go `select`; supports boolean guards, timer timeouts, and multi-statement bodies
+- **ALT** — Channel alternation, maps to Go `select`; supports boolean guards, timer timeouts, multi-statement bodies, and replicators (`ALT i = 0 FOR n` using `reflect.Select`)
 - **SKIP** — No-op process
 - **STOP** — Error + deadlock
 

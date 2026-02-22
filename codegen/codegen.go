@@ -18,6 +18,7 @@ type Generator struct {
 	needMath bool // track if we need math package import
 	needMathBits bool // track if we need math/bits package import
 	needBufio    bool // track if we need bufio package import
+	needReflect  bool // track if we need reflect package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -95,6 +96,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needMath = false
 	g.needMathBits = false
 	g.needBufio = false
+	g.needReflect = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -126,6 +128,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.containsRetypes(stmt) {
 			g.needMath = true
+		}
+		if g.containsAltReplicator(stmt) {
+			g.needReflect = true
 		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
@@ -202,7 +207,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits || g.needBufio {
+	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits || g.needBufio || g.needReflect {
 		g.writeLine("import (")
 		g.indent++
 		if g.needBufio {
@@ -219,6 +224,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.needOs {
 			g.writeLine(`"os"`)
+		}
+		if g.needReflect {
+			g.writeLine(`"reflect"`)
 		}
 		if g.needSync {
 			g.writeLine(`"sync"`)
@@ -1602,6 +1610,11 @@ func (g *Generator) generateParBlock(par *ast.ParBlock) {
 }
 
 func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
+	if alt.Replicator != nil {
+		g.generateReplicatedAlt(alt)
+		return
+	}
+
 	// ALT becomes Go select statement
 	// For guards, we use a pattern with nil channels
 
@@ -1654,6 +1667,126 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 		}
 		g.indent--
 	}
+	g.writeLine("}")
+}
+
+func (g *Generator) generateReplicatedAlt(alt *ast.AltBlock) {
+	// Replicated ALT: ALT i = start FOR count
+	// Uses reflect.Select for runtime-variable case count
+	if len(alt.Cases) == 0 {
+		return
+	}
+	c := alt.Cases[0]
+	rep := alt.Replicator
+	v := goIdent(rep.Variable)
+
+	// Determine receive type from scoped declarations
+	recvType := "int" // default
+	for _, decl := range c.Declarations {
+		if vd, ok := decl.(*ast.VarDecl); ok {
+			for _, name := range vd.Names {
+				if name == c.Variable {
+					recvType = g.occamTypeToGo(vd.Type)
+					break
+				}
+			}
+		}
+	}
+
+	// Open a block for scoping
+	g.writeLine("{")
+	g.indent++
+
+	// _altCount := int(<count>)
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write("_altCount := int(")
+	g.generateExpression(rep.Count)
+	g.write(")\n")
+
+	// _altCases := make([]reflect.SelectCase, _altCount)
+	g.writeLine("_altCases := make([]reflect.SelectCase, _altCount)")
+
+	// Setup loop: build select cases
+	g.writeLine("for _altI := 0; _altI < _altCount; _altI++ {")
+	g.indent++
+
+	// Compute replicator variable
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	if rep.Step != nil {
+		g.write(fmt.Sprintf("%s := ", v))
+		g.generateExpression(rep.Start)
+		g.write(" + _altI * (")
+		g.generateExpression(rep.Step)
+		g.write(")\n")
+	} else {
+		g.write(fmt.Sprintf("%s := ", v))
+		g.generateExpression(rep.Start)
+		g.write(" + _altI\n")
+	}
+
+	// Generate scoped abbreviations (needed for channel index computation)
+	for _, decl := range c.Declarations {
+		if abbr, ok := decl.(*ast.Abbreviation); ok {
+			g.generateAbbreviation(abbr)
+		}
+	}
+
+	// Build select case entry
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write("_altCases[_altI] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(")
+	if c.ChannelIndex != nil {
+		g.write(goIdent(c.Channel) + "[")
+		g.generateExpression(c.ChannelIndex)
+		g.write("]")
+	} else {
+		g.write(goIdent(c.Channel))
+	}
+	g.write(")}\n")
+
+	g.indent--
+	g.writeLine("}")
+
+	// Call reflect.Select
+	g.writeLine("_altChosen, _altValue, _ := reflect.Select(_altCases)")
+
+	// Recompute replicator variable from chosen index
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	if rep.Step != nil {
+		g.write(fmt.Sprintf("%s := ", v))
+		g.generateExpression(rep.Start)
+		g.write(" + _altChosen * (")
+		g.generateExpression(rep.Step)
+		g.write(")\n")
+	} else {
+		g.write(fmt.Sprintf("%s := ", v))
+		g.generateExpression(rep.Start)
+		g.write(" + _altChosen\n")
+	}
+	g.writeLine(fmt.Sprintf("_ = %s", v))
+
+	// Generate scoped var declarations
+	for _, decl := range c.Declarations {
+		if vd, ok := decl.(*ast.VarDecl); ok {
+			g.generateVarDecl(vd)
+		}
+	}
+
+	// Generate scoped abbreviations
+	for _, decl := range c.Declarations {
+		if abbr, ok := decl.(*ast.Abbreviation); ok {
+			g.generateAbbreviation(abbr)
+		}
+	}
+
+	// Assign received value from reflect.Value
+	g.writeLine(fmt.Sprintf("%s = _altValue.Interface().(%s)", goIdent(c.Variable), recvType))
+
+	// Generate body
+	for _, s := range c.Body {
+		g.generateStatement(s)
+	}
+
+	g.indent--
 	g.writeLine("}")
 }
 
@@ -2410,6 +2543,72 @@ func (g *Generator) containsRetypes(stmt ast.Statement) bool {
 		for _, choice := range s.Choices {
 			for _, inner := range choice.Body {
 				if g.containsRetypes(inner) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (g *Generator) containsAltReplicator(stmt ast.Statement) bool {
+	switch s := stmt.(type) {
+	case *ast.AltBlock:
+		if s.Replicator != nil {
+			return true
+		}
+		for _, c := range s.Cases {
+			for _, inner := range c.Body {
+				if g.containsAltReplicator(inner) {
+					return true
+				}
+			}
+		}
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			if g.containsAltReplicator(inner) {
+				return true
+			}
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			if g.containsAltReplicator(inner) {
+				return true
+			}
+		}
+	case *ast.ProcDecl:
+		for _, inner := range s.Body {
+			if g.containsAltReplicator(inner) {
+				return true
+			}
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			if g.containsAltReplicator(inner) {
+				return true
+			}
+		}
+	case *ast.WhileLoop:
+		for _, inner := range s.Body {
+			if g.containsAltReplicator(inner) {
+				return true
+			}
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.NestedIf != nil && g.containsAltReplicator(choice.NestedIf) {
+				return true
+			}
+			for _, inner := range choice.Body {
+				if g.containsAltReplicator(inner) {
+					return true
+				}
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			for _, inner := range choice.Body {
+				if g.containsAltReplicator(inner) {
 					return true
 				}
 			}

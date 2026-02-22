@@ -1568,6 +1568,17 @@ func (p *Parser) parseReplicator() *ast.Replicator {
 func (p *Parser) parseAltBlock() *ast.AltBlock {
 	block := &ast.AltBlock{Token: p.curToken}
 
+	// Check for replicator: ALT i = start FOR count
+	if p.peekTokenIs(lexer.IDENT) {
+		p.nextToken() // move to identifier
+		if p.peekTokenIs(lexer.EQ) {
+			block.Replicator = p.parseReplicator()
+		} else {
+			p.addError("unexpected identifier after ALT")
+			return block
+		}
+	}
+
 	// Skip to next line
 	for p.peekTokenIs(lexer.NEWLINE) {
 		p.nextToken()
@@ -1637,8 +1648,36 @@ func (p *Parser) parseAltCases() []ast.AltCase {
 	return cases
 }
 
+func (p *Parser) isAltDeclStart() bool {
+	switch p.curToken.Type {
+	case lexer.INT_TYPE, lexer.BYTE_TYPE, lexer.BOOL_TYPE, lexer.REAL_TYPE, lexer.REAL32_TYPE, lexer.REAL64_TYPE:
+		return true
+	case lexer.VAL:
+		return true
+	case lexer.INITIAL:
+		return true
+	}
+	return false
+}
+
 func (p *Parser) parseAltCase() *ast.AltCase {
 	altCase := &ast.AltCase{}
+
+	// Parse scoped declarations before the channel input (e.g., BYTE ch:, VAL INT X IS expr:)
+	for p.isAltDeclStart() {
+		stmt := p.parseStatement()
+		if stmt != nil {
+			altCase.Declarations = append(altCase.Declarations, stmt)
+		}
+		// Advance past the end of the declaration
+		if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
+			p.nextToken()
+		}
+		// Skip newlines to reach next token
+		for p.curTokenIs(lexer.NEWLINE) {
+			p.nextToken()
+		}
+	}
 
 	// Check for guard: expression & channel ? var
 	// For now, we expect: channel ? var (no guard support yet)

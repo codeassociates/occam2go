@@ -382,9 +382,11 @@ func (r *Receive) statementNode()       {}
 func (r *Receive) TokenLiteral() string { return r.Token.Literal }
 
 // AltBlock represents an ALT block (alternation/select)
+// If Replicator is non-nil, this is a replicated ALT (ALT i = 0 FOR n)
 type AltBlock struct {
-	Token lexer.Token // the ALT token
-	Cases []AltCase
+	Token      lexer.Token // the ALT token
+	Cases      []AltCase
+	Replicator *Replicator // optional replicator
 }
 
 func (a *AltBlock) statementNode()       {}
@@ -400,6 +402,7 @@ type AltCase struct {
 	IsTimer      bool        // true if this is a timer AFTER case
 	Timer        string      // timer name (when IsTimer)
 	Deadline     Expression  // AFTER deadline expression (when IsTimer)
+	Declarations []Statement // scoped declarations before channel input (e.g., BYTE ch:)
 }
 
 // TimerDecl represents a timer declaration: TIMER tim:

@@ -264,3 +264,92 @@ func TestE2EChanShorthand(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ReplicatedAltBasic(t *testing.T) {
+	// Test replicated ALT: 3 channels, send on one, ALT selects it
+	occam := `SEQ
+  [3]CHAN OF INT cs:
+  INT result:
+  PAR
+    cs[1] ! 42
+    ALT i = 0 FOR 3
+      INT val:
+      cs[i] ? val
+        result := val
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedAltIndex(t *testing.T) {
+	// Test that the replicator variable is available in the body
+	occam := `SEQ
+  [3]CHAN OF INT cs:
+  INT chosen:
+  INT value:
+  PAR
+    cs[2] ! 99
+    ALT i = 0 FOR 3
+      INT val:
+      cs[i] ? val
+        SEQ
+          chosen := i
+          value := val
+  print.int(chosen)
+  print.int(value)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "2\n99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedAltWithAbbreviation(t *testing.T) {
+	// Test replicated ALT with scoped abbreviation
+	occam := `SEQ
+  [4]CHAN OF INT cs:
+  INT result:
+  PAR
+    cs[2] ! 77
+    ALT j = 0 FOR 4
+      VAL INT X IS j:
+      INT val:
+      cs[X] ? val
+        result := val
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "77\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ReplicatedAltByte(t *testing.T) {
+	// Test replicated ALT with BYTE channels
+	occam := `SEQ
+  [2]CHAN OF BYTE cs:
+  BYTE result:
+  PAR
+    cs[0] ! 'A'
+    ALT i = 0 FOR 2
+      BYTE ch:
+      cs[i] ? ch
+        result := ch
+  IF
+    result = 'A'
+      print.int(1)
+    TRUE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
