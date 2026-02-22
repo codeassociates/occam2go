@@ -30,6 +30,12 @@ func WithDefines(defs map[string]string) Option {
 	}
 }
 
+// SourceLoc maps an expanded output line back to its original file and line number.
+type SourceLoc struct {
+	File string
+	Line int
+}
+
 // Preprocessor performs textual preprocessing of occam source.
 type Preprocessor struct {
 	defines      map[string]string
@@ -37,6 +43,7 @@ type Preprocessor struct {
 	errors       []string
 	processing   map[string]bool // absolute paths currently being processed (circular include detection)
 	included     map[string]bool // absolute paths already included (prevent duplicate inclusion)
+	sourceMap    []SourceLoc     // maps each expanded output line (0-indexed) to original file:line
 }
 
 // New creates a new Preprocessor with the given options.
@@ -60,6 +67,12 @@ func (pp *Preprocessor) Errors() []string {
 	return pp.errors
 }
 
+// SourceMap returns the source map built during preprocessing.
+// Entry i corresponds to expanded output line i+1.
+func (pp *Preprocessor) SourceMap() []SourceLoc {
+	return pp.sourceMap
+}
+
 // ProcessFile reads and processes a file, resolving #INCLUDE directives.
 func (pp *Preprocessor) ProcessFile(filename string) (string, error) {
 	absPath, err := filepath.Abs(filename)
@@ -78,18 +91,19 @@ func (pp *Preprocessor) ProcessFile(filename string) (string, error) {
 		return "", fmt.Errorf("cannot read %q: %w", filename, err)
 	}
 
-	return pp.processSource(string(data), filepath.Dir(absPath))
+	return pp.processSource(string(data), filepath.Dir(absPath), filename)
 }
 
 // ProcessSource processes occam source text with no file context.
 // #INCLUDE directives will only resolve against includePaths.
 func (pp *Preprocessor) ProcessSource(source string) (string, error) {
-	return pp.processSource(source, "")
+	return pp.processSource(source, "", "<input>")
 }
 
 // processSource performs line-by-line preprocessing.
 // baseDir is the directory of the current file (for relative #INCLUDE resolution).
-func (pp *Preprocessor) processSource(source string, baseDir string) (string, error) {
+// filename is used for source map entries.
+func (pp *Preprocessor) processSource(source string, baseDir string, filename string) (string, error) {
 	lines := strings.Split(source, "\n")
 	var out strings.Builder
 	var condStack []condState
@@ -113,11 +127,13 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 					}
 				}
 				out.WriteString("") // blank line preserves line numbers
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 
 			case "IF":
 				val := pp.evalExpr(rest)
 				condStack = append(condStack, condState{active: val, seenTrue: val})
 				out.WriteString("")
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 
 			case "ELSE":
 				if len(condStack) == 0 {
@@ -132,6 +148,7 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 					}
 				}
 				out.WriteString("")
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 
 			case "ENDIF":
 				if len(condStack) == 0 {
@@ -140,6 +157,7 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 					condStack = condStack[:len(condStack)-1]
 				}
 				out.WriteString("")
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 
 			case "INCLUDE":
 				if isActive(condStack) {
@@ -148,12 +166,19 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 						return "", fmt.Errorf("line %d: %w", i+1, err)
 					}
 					out.WriteString(included)
+					if included == "" {
+						// File already included (dedup) — entry for the blank line
+						pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
+					}
+					// Otherwise, entries were added by the recursive processSource call
 				} else {
 					out.WriteString("")
+					pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 				}
 
 			case "COMMENT", "PRAGMA", "USE":
 				out.WriteString("") // no-op, blank line
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 
 			default:
 				// Unknown directive — pass through if active
@@ -162,6 +187,7 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 				} else {
 					out.WriteString("")
 				}
+				pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 			}
 		} else {
 			if isActive(condStack) {
@@ -169,6 +195,7 @@ func (pp *Preprocessor) processSource(source string, baseDir string) (string, er
 			} else {
 				out.WriteString("") // blank line preserves line numbers
 			}
+			pp.sourceMap = append(pp.sourceMap, SourceLoc{filename, i + 1})
 		}
 	}
 

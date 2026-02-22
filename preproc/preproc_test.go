@@ -435,3 +435,95 @@ func TestEndifWithoutIf(t *testing.T) {
 		t.Error("expected #ENDIF without #IF error")
 	}
 }
+
+// --- Source map tests ---
+
+func TestSourceMapSimple(t *testing.T) {
+	pp := New()
+	src := "line1\nline2\nline3"
+	out, err := pp.ProcessSource(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(out, "\n")
+	sm := pp.SourceMap()
+	if len(sm) != len(lines) {
+		t.Fatalf("source map length %d != output lines %d", len(sm), len(lines))
+	}
+	for i, loc := range sm {
+		if loc.File != "<input>" {
+			t.Errorf("entry %d: file = %q, want %q", i, loc.File, "<input>")
+		}
+		if loc.Line != i+1 {
+			t.Errorf("entry %d: line = %d, want %d", i, loc.Line, i+1)
+		}
+	}
+}
+
+func TestSourceMapWithDirectives(t *testing.T) {
+	pp := New()
+	src := "#DEFINE FOO\n#IF TRUE\nhello\n#ENDIF\nworld"
+	_, err := pp.ProcessSource(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm := pp.SourceMap()
+	// 5 source lines → 5 source map entries
+	if len(sm) != 5 {
+		t.Fatalf("source map length = %d, want 5", len(sm))
+	}
+	// Each entry maps to its original line in <input>
+	for i, loc := range sm {
+		if loc.File != "<input>" {
+			t.Errorf("entry %d: file = %q, want %q", i, loc.File, "<input>")
+		}
+		if loc.Line != i+1 {
+			t.Errorf("entry %d: line = %d, want %d", i, loc.Line, i+1)
+		}
+	}
+}
+
+func TestSourceMapWithInclude(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create included file (2 lines + trailing newline = 3 entries after split)
+	os.WriteFile(filepath.Join(tmpDir, "inc.occ"), []byte("incA\nincB\n"), 0644)
+
+	// Create main file: line1, #INCLUDE, line3
+	mainContent := "line1\n#INCLUDE \"inc.occ\"\nline3\n"
+	mainFile := filepath.Join(tmpDir, "main.occ")
+	os.WriteFile(mainFile, []byte(mainContent), 0644)
+
+	pp := New()
+	out, err := pp.ProcessFile(mainFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sm := pp.SourceMap()
+	outLines := strings.Split(out, "\n")
+	if len(sm) != len(outLines) {
+		t.Fatalf("source map length %d != output lines %d", len(sm), len(outLines))
+	}
+
+	// Entry 0: main.occ line 1
+	if sm[0].Line != 1 || !strings.HasSuffix(sm[0].File, "main.occ") {
+		t.Errorf("entry 0: got {%s, %d}, want {main.occ, 1}", sm[0].File, sm[0].Line)
+	}
+
+	// Entries 1-3: inc.occ lines 1-3
+	incFile := filepath.Join(tmpDir, "inc.occ")
+	for i := 1; i <= 3; i++ {
+		if sm[i].File != incFile {
+			t.Errorf("entry %d: file = %q, want %q", i, sm[i].File, incFile)
+		}
+		if sm[i].Line != i {
+			t.Errorf("entry %d: line = %d, want %d", i, sm[i].Line, i)
+		}
+	}
+
+	// Entry 4: main.occ line 3
+	if sm[4].Line != 3 || !strings.HasSuffix(sm[4].File, "main.occ") {
+		t.Errorf("entry 4: got {%s, %d}, want {main.occ, 3}", sm[4].File, sm[4].Line)
+	}
+}

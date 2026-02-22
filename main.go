@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/codeassociates/occam2go/codegen"
@@ -97,8 +99,9 @@ func main() {
 
 	if len(p.Errors()) > 0 {
 		fmt.Fprintf(os.Stderr, "Parse errors:\n")
+		sourceMap := pp.SourceMap()
 		for _, err := range p.Errors() {
-			fmt.Fprintf(os.Stderr, "  %s\n", err)
+			fmt.Fprintf(os.Stderr, "  %s\n", translateError(err, sourceMap))
 		}
 		os.Exit(1)
 	}
@@ -117,6 +120,23 @@ func main() {
 	} else {
 		fmt.Print(output)
 	}
+}
+
+var lineErrRe = regexp.MustCompile(`^line (\d+): (.*)`)
+
+// translateError rewrites "line NNN: msg" to "file:line: msg" using the source map.
+func translateError(errMsg string, sourceMap []preproc.SourceLoc) string {
+	m := lineErrRe.FindStringSubmatch(errMsg)
+	if m == nil {
+		return errMsg
+	}
+	lineNum, _ := strconv.Atoi(m[1])
+	idx := lineNum - 1 // source map is 0-indexed
+	if idx < 0 || idx >= len(sourceMap) {
+		return errMsg
+	}
+	loc := sourceMap[idx]
+	return fmt.Sprintf("%s:%d: %s", loc.File, loc.Line, m[2])
 }
 
 func genModuleCmd(args []string) {
