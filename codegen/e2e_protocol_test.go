@@ -153,3 +153,50 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ProtocolTrailingColon(t *testing.T) {
+	// Issue #73: trailing colon on protocol declarations
+	occam := `PROTOCOL SIGNAL IS INT :
+PROTOCOL PAIR IS INT ; BOOL :
+
+SEQ
+  CHAN OF SIGNAL c:
+  INT result:
+  PAR
+    c ! 7
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "7\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_VariantProtocolTrailingColon(t *testing.T) {
+	// Issue #73: trailing colon on variant protocol declarations
+	occam := `PROTOCOL MSG
+  CASE
+    data; INT
+    quit
+:
+
+SEQ
+  CHAN OF MSG c:
+  INT result:
+  result := 0
+  PAR
+    c ! data ; 55
+    c ? CASE
+      data ; result
+        print.int(result)
+      quit
+        print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "55\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

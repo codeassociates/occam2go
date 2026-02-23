@@ -1764,7 +1764,7 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 	if hasGuards {
 		// Generate channel variables for guarded cases
 		for i, c := range alt.Cases {
-			if c.Guard != nil {
+			if c.Guard != nil && !c.IsSkip {
 				g.builder.WriteString(strings.Repeat("\t", g.indent))
 				g.write(fmt.Sprintf("var _alt%d chan ", i))
 				// We don't know the channel type here, so use interface{}
@@ -1782,7 +1782,9 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 	g.writeLine("select {")
 	for i, c := range alt.Cases {
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		if c.IsTimer {
+		if c.IsSkip {
+			g.write("default:\n")
+		} else if c.IsTimer {
 			g.write("case <-time.After(time.Duration(")
 			g.generateExpression(c.Deadline)
 			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")

@@ -422,7 +422,8 @@ func isContinuationOp(t TokenType) bool {
 		PLUS_KW, MINUS_KW, TIMES,
 		EQ, NEQ, LT, GT, LE, GE,
 		BITAND, BITOR, BITXOR, LSHIFT, RSHIFT,
-		ASSIGN, AFTER:
+		ASSIGN, AFTER,
+		IS:
 		return true
 	}
 	return false

@@ -401,6 +401,7 @@ type AltCase struct {
 	Variable     string      // variable to receive into
 	Body         []Statement // the body to execute
 	IsTimer      bool        // true if this is a timer AFTER case
+	IsSkip       bool        // true if this is a guarded SKIP case (guard & SKIP)
 	Timer        string      // timer name (when IsTimer)
 	Deadline     Expression  // AFTER deadline expression (when IsTimer)
 	Declarations []Statement // scoped declarations before channel input (e.g., BYTE ch:)

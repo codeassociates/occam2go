@@ -859,6 +859,7 @@ func (p *Parser) parseProtocolDecl() *ast.ProtocolDecl {
 		}
 
 		if p.peekTokenIs(lexer.INDENT) {
+			savedLevel := p.indentLevel
 			p.nextToken() // consume INDENT
 			p.nextToken() // move into block
 
@@ -866,6 +867,14 @@ func (p *Parser) parseProtocolDecl() *ast.ProtocolDecl {
 				// Variant protocol
 				decl.Kind = "variant"
 				decl.Variants = p.parseProtocolVariants()
+				// Consume remaining DEDENTs back to the level before the INDENT
+				for p.peekTokenIs(lexer.DEDENT) && p.indentLevel > savedLevel {
+					p.nextToken()
+				}
+				// Optionally consume trailing colon terminator
+				if p.peekTokenIs(lexer.COLON) {
+					p.nextToken()
+				}
 				p.protocolNames[decl.Name] = true
 				p.protocolDefs[decl.Name] = decl
 				return decl
@@ -904,6 +913,11 @@ func (p *Parser) parseProtocolDecl() *ast.ProtocolDecl {
 		decl.Kind = "simple"
 	} else {
 		decl.Kind = "sequential"
+	}
+
+	// Optionally consume trailing colon terminator
+	if p.peekTokenIs(lexer.COLON) {
+		p.nextToken()
 	}
 
 	p.protocolNames[decl.Name] = true
@@ -1682,19 +1696,20 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 	}
 
 	// Check for guard: expression & channel ? var
-	// For now, we expect: channel ? var (no guard support yet)
-	// or: guard & channel ? var
+	// or: channel ? var (no guard)
+	// or: guard & SKIP
 
-	// First token should be identifier (channel name or guard start)
-	if !p.curTokenIs(lexer.IDENT) && !p.curTokenIs(lexer.TRUE) && !p.curTokenIs(lexer.FALSE) {
+	// First token should be identifier, TRUE/FALSE, or ( for guard expression
+	if !p.curTokenIs(lexer.IDENT) && !p.curTokenIs(lexer.TRUE) && !p.curTokenIs(lexer.FALSE) && !p.curTokenIs(lexer.LPAREN) {
 		p.addError(fmt.Sprintf("expected channel name or guard in ALT case, got %s", p.curToken.Type))
 		return nil
 	}
 
 	// Look ahead to determine if this is a guard or channel
+	// If current is ( then it must be a guard expression
 	// If next token is & then we have a guard
 	// If next token is ? then it's a channel/timer receive
-	if p.peekTokenIs(lexer.RECEIVE) {
+	if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.RECEIVE) {
 		name := p.curToken.Literal
 		if p.timerNames[name] {
 			// Timer case: tim ? AFTER deadline
@@ -1715,7 +1730,7 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			}
 			altCase.Variable = p.curToken.Literal
 		}
-	} else if p.peekTokenIs(lexer.LBRACKET) {
+	} else if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.LBRACKET) {
 		// Indexed channel case: cs[i] ? var
 		name := p.curToken.Literal
 		altCase.Channel = name
@@ -1733,9 +1748,7 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 		}
 		altCase.Variable = p.curToken.Literal
 	} else {
-		// Could be a guard followed by & channel ? var
-		// For simplicity, parse expression until we hit &
-		// For now, only support simple TRUE/FALSE or identifier guards
+		// Guard followed by & channel ? var, or guard & SKIP
 		guard := p.parseExpression(LOWEST)
 		altCase.Guard = guard
 
@@ -1747,30 +1760,34 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 		p.nextToken() // move to &
 		p.nextToken() // move past &
 
-		// Now expect channel ? var or channel[index] ? var
-		if !p.curTokenIs(lexer.IDENT) {
-			p.addError(fmt.Sprintf("expected channel name after guard, got %s", p.curToken.Type))
+		if p.curTokenIs(lexer.SKIP) {
+			// Guarded SKIP: guard & SKIP
+			altCase.IsSkip = true
+		} else if !p.curTokenIs(lexer.IDENT) {
+			p.addError(fmt.Sprintf("expected channel name or SKIP after guard, got %s", p.curToken.Type))
 			return nil
-		}
-		altCase.Channel = p.curToken.Literal
+		} else {
+			// Channel operation after guard
+			altCase.Channel = p.curToken.Literal
 
-		if p.peekTokenIs(lexer.LBRACKET) {
-			// Indexed channel with guard: guard & cs[i] ? var
-			p.nextToken() // move to [
-			p.nextToken() // move past [
-			altCase.ChannelIndex = p.parseExpression(LOWEST)
-			if !p.expectPeek(lexer.RBRACKET) {
+			if p.peekTokenIs(lexer.LBRACKET) {
+				// Indexed channel with guard: guard & cs[i] ? var
+				p.nextToken() // move to [
+				p.nextToken() // move past [
+				altCase.ChannelIndex = p.parseExpression(LOWEST)
+				if !p.expectPeek(lexer.RBRACKET) {
+					return nil
+				}
+			}
+
+			if !p.expectPeek(lexer.RECEIVE) {
 				return nil
 			}
+			if !p.expectPeek(lexer.IDENT) {
+				return nil
+			}
+			altCase.Variable = p.curToken.Literal
 		}
-
-		if !p.expectPeek(lexer.RECEIVE) {
-			return nil
-		}
-		if !p.expectPeek(lexer.IDENT) {
-			return nil
-		}
-		altCase.Variable = p.curToken.Literal
 	}
 
 	// Skip to next line for the body
@@ -2634,8 +2651,13 @@ func (p *Parser) parseCaseStatement() *ast.CaseStatement {
 		if p.curTokenIs(lexer.ELSE) {
 			choice.IsElse = true
 		} else {
-			// Parse value expression
+			// Parse value expression(s), comma-separated
 			choice.Values = append(choice.Values, p.parseExpression(LOWEST))
+			for p.peekTokenIs(lexer.COMMA) {
+				p.nextToken() // move to ,
+				p.nextToken() // move past ,
+				choice.Values = append(choice.Values, p.parseExpression(LOWEST))
+			}
 		}
 
 		// Skip newlines and expect INDENT for body
