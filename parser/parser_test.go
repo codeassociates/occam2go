@@ -603,9 +603,12 @@ func TestArrayDecl(t *testing.T) {
 		t.Errorf("expected type INT, got %s", decl.Type)
 	}
 
-	sizeLit, ok := decl.Size.(*ast.IntegerLiteral)
+	if len(decl.Sizes) != 1 {
+		t.Fatalf("expected 1 size dimension, got %d", len(decl.Sizes))
+	}
+	sizeLit, ok := decl.Sizes[0].(*ast.IntegerLiteral)
 	if !ok {
-		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Size)
+		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Sizes[0])
 	}
 	if sizeLit.Value != 5 {
 		t.Errorf("expected size 5, got %d", sizeLit.Value)
@@ -669,13 +672,13 @@ func TestIndexedAssignment(t *testing.T) {
 		t.Errorf("expected name 'arr', got %s", assign.Name)
 	}
 
-	if assign.Index == nil {
-		t.Fatal("expected index expression, got nil")
+	if len(assign.Indices) != 1 {
+		t.Fatalf("expected 1 index, got %d", len(assign.Indices))
 	}
 
-	indexLit, ok := assign.Index.(*ast.IntegerLiteral)
+	indexLit, ok := assign.Indices[0].(*ast.IntegerLiteral)
 	if !ok {
-		t.Fatalf("expected IntegerLiteral for index, got %T", assign.Index)
+		t.Fatalf("expected IntegerLiteral for index, got %T", assign.Indices[0])
 	}
 	if indexLit.Value != 2 {
 		t.Errorf("expected index 2, got %d", indexLit.Value)
@@ -959,7 +962,7 @@ func TestMultiAssignment(t *testing.T) {
 	if len(ma.Targets) != 2 || ma.Targets[0].Name != "a" || ma.Targets[1].Name != "b" {
 		t.Errorf("expected targets [a, b], got %v", ma.Targets)
 	}
-	if ma.Targets[0].Index != nil || ma.Targets[1].Index != nil {
+	if len(ma.Targets[0].Indices) != 0 || len(ma.Targets[1].Indices) != 0 {
 		t.Errorf("expected no index on targets")
 	}
 
@@ -1000,7 +1003,7 @@ func TestMultiAssignmentIndexed(t *testing.T) {
 	if ma.Targets[0].Name != "x" || ma.Targets[1].Name != "x" {
 		t.Errorf("expected target names [x, x], got [%s, %s]", ma.Targets[0].Name, ma.Targets[1].Name)
 	}
-	if ma.Targets[0].Index == nil || ma.Targets[1].Index == nil {
+	if len(ma.Targets[0].Indices) == 0 || len(ma.Targets[1].Indices) == 0 {
 		t.Fatalf("expected indexed targets")
 	}
 
@@ -1029,10 +1032,10 @@ func TestMultiAssignmentMixed(t *testing.T) {
 	if len(ma.Targets) != 2 {
 		t.Fatalf("expected 2 targets, got %d", len(ma.Targets))
 	}
-	if ma.Targets[0].Name != "a" || ma.Targets[0].Index != nil {
+	if ma.Targets[0].Name != "a" || len(ma.Targets[0].Indices) != 0 {
 		t.Errorf("expected simple target 'a', got %v", ma.Targets[0])
 	}
-	if ma.Targets[1].Name != "x" || ma.Targets[1].Index == nil {
+	if ma.Targets[1].Name != "x" || len(ma.Targets[1].Indices) == 0 {
 		t.Errorf("expected indexed target 'x[i]', got %v", ma.Targets[1])
 	}
 }
@@ -1930,13 +1933,13 @@ func TestRecordFieldAssignment(t *testing.T) {
 		t.Errorf("expected name 'p', got %s", assign.Name)
 	}
 
-	if assign.Index == nil {
+	if len(assign.Indices) == 0 {
 		t.Fatal("expected index expression, got nil")
 	}
 
-	ident, ok := assign.Index.(*ast.Identifier)
+	ident, ok := assign.Indices[0].(*ast.Identifier)
 	if !ok {
-		t.Fatalf("expected Identifier for index, got %T", assign.Index)
+		t.Fatalf("expected Identifier for index, got %T", assign.Indices[0])
 	}
 	if ident.Value != "x" {
 		t.Errorf("expected index 'x', got %s", ident.Value)
@@ -2005,13 +2008,13 @@ func TestChanArrayDecl(t *testing.T) {
 		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
 	}
 
-	if !decl.IsArray {
+	if len(decl.Sizes) == 0 {
 		t.Error("expected IsArray=true")
 	}
 
-	sizeLit, ok := decl.Size.(*ast.IntegerLiteral)
+	sizeLit, ok := decl.Sizes[0].(*ast.IntegerLiteral)
 	if !ok {
-		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Size)
+		t.Fatalf("expected IntegerLiteral for size, got %T", decl.Sizes[0])
 	}
 	if sizeLit.Value != 5 {
 		t.Errorf("expected size 5, got %d", sizeLit.Value)
@@ -2047,13 +2050,13 @@ func TestIndexedSend(t *testing.T) {
 		t.Errorf("expected channel 'cs', got %s", send.Channel)
 	}
 
-	if send.ChannelIndex == nil {
+	if len(send.ChannelIndices) == 0 {
 		t.Fatal("expected ChannelIndex, got nil")
 	}
 
-	idxLit, ok := send.ChannelIndex.(*ast.IntegerLiteral)
+	idxLit, ok := send.ChannelIndices[0].(*ast.IntegerLiteral)
 	if !ok {
-		t.Fatalf("expected IntegerLiteral for index, got %T", send.ChannelIndex)
+		t.Fatalf("expected IntegerLiteral for index, got %T", send.ChannelIndices[0])
 	}
 	if idxLit.Value != 0 {
 		t.Errorf("expected index 0, got %d", idxLit.Value)
@@ -2089,13 +2092,13 @@ func TestIndexedReceive(t *testing.T) {
 		t.Errorf("expected channel 'cs', got %s", recv.Channel)
 	}
 
-	if recv.ChannelIndex == nil {
+	if len(recv.ChannelIndices) == 0 {
 		t.Fatal("expected ChannelIndex, got nil")
 	}
 
-	idxIdent, ok := recv.ChannelIndex.(*ast.Identifier)
+	idxIdent, ok := recv.ChannelIndices[0].(*ast.Identifier)
 	if !ok {
-		t.Fatalf("expected Identifier for index, got %T", recv.ChannelIndex)
+		t.Fatalf("expected Identifier for index, got %T", recv.ChannelIndices[0])
 	}
 	if idxIdent.Value != "i" {
 		t.Errorf("expected index 'i', got %s", idxIdent.Value)
@@ -2132,8 +2135,8 @@ func TestChanArrayParam(t *testing.T) {
 	if !p0.IsChan {
 		t.Error("param 0: expected IsChan=true")
 	}
-	if !p0.IsChanArray {
-		t.Error("param 0: expected IsChanArray=true")
+	if p0.ChanArrayDims == 0 {
+		t.Error("param 0: expected ChanArrayDims > 0")
 	}
 	if p0.ChanElemType != "INT" {
 		t.Errorf("param 0: expected ChanElemType=INT, got %s", p0.ChanElemType)
@@ -2143,8 +2146,8 @@ func TestChanArrayParam(t *testing.T) {
 	}
 
 	p1 := proc.Params[1]
-	if p1.IsChan || p1.IsChanArray {
-		t.Error("param 1: expected IsChan=false, IsChanArray=false")
+	if p1.IsChan || p1.ChanArrayDims > 0 {
+		t.Error("param 1: expected IsChan=false, ChanArrayDims=0")
 	}
 	if !p1.IsVal {
 		t.Error("param 1: expected IsVal=true")
@@ -2216,8 +2219,8 @@ func TestChanArrayDirParam(t *testing.T) {
 	}
 
 	p0 := proc.Params[0]
-	if !p0.IsChanArray {
-		t.Error("param 0: expected IsChanArray=true")
+	if p0.ChanArrayDims == 0 {
+		t.Error("param 0: expected ChanArrayDims > 0")
 	}
 	if p0.ChanDir != "?" {
 		t.Errorf("param 0: expected ChanDir=?, got %q", p0.ChanDir)
@@ -2607,8 +2610,8 @@ func TestOpenArrayParam(t *testing.T) {
 	if !p0.IsVal {
 		t.Error("param 0: expected IsVal=true")
 	}
-	if !p0.IsOpenArray {
-		t.Error("param 0: expected IsOpenArray=true")
+	if p0.OpenArrayDims == 0 {
+		t.Error("param 0: expected OpenArrayDims > 0")
 	}
 	if p0.Type != "INT" {
 		t.Errorf("param 0: expected Type=INT, got %s", p0.Type)
@@ -2618,8 +2621,8 @@ func TestOpenArrayParam(t *testing.T) {
 	}
 
 	p1 := proc.Params[1]
-	if p1.IsOpenArray {
-		t.Error("param 1: expected IsOpenArray=false")
+	if p1.OpenArrayDims > 0 {
+		t.Error("param 1: expected OpenArrayDims=0")
 	}
 	if p1.IsVal {
 		t.Error("param 1: expected IsVal=false")
@@ -2672,7 +2675,7 @@ func TestChanArrayDeclShorthand(t *testing.T) {
 		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
 	}
 
-	if !decl.IsArray {
+	if len(decl.Sizes) == 0 {
 		t.Error("expected IsArray=true")
 	}
 
@@ -2721,8 +2724,8 @@ func TestChanParamShorthand(t *testing.T) {
 
 	// Second param: []CHAN INT cs
 	p1 := proc.Params[1]
-	if !p1.IsChan || !p1.IsChanArray {
-		t.Error("param 1: expected IsChan=true, IsChanArray=true")
+	if !p1.IsChan || p1.ChanArrayDims == 0 {
+		t.Error("param 1: expected IsChan=true, ChanArrayDims > 0")
 	}
 	if p1.ChanElemType != "INT" {
 		t.Errorf("param 1: expected ChanElemType=INT, got %s", p1.ChanElemType)
@@ -3356,7 +3359,7 @@ func TestAltReplicator(t *testing.T) {
 	if c.Channel != "in" {
 		t.Errorf("expected channel 'in', got %q", c.Channel)
 	}
-	if c.ChannelIndex == nil {
+	if len(c.ChannelIndices) == 0 {
 		t.Fatal("expected channel index, got nil")
 	}
 	if c.Variable != "ch" {
@@ -3503,5 +3506,211 @@ func TestMostNegMostPosInt16Int32Int64(t *testing.T) {
 				t.Errorf("for %q: expected IsNeg=%v, got %v", input, expectedNeg, most.IsNeg)
 			}
 		}
+	}
+}
+
+func TestMultiDimArrayDecl(t *testing.T) {
+	input := `[3][4]INT grid:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ArrayDecl)
+	if !ok {
+		t.Fatalf("expected ArrayDecl, got %T", program.Statements[0])
+	}
+
+	if len(decl.Sizes) != 2 {
+		t.Fatalf("expected 2 dimensions, got %d", len(decl.Sizes))
+	}
+
+	s0, ok := decl.Sizes[0].(*ast.IntegerLiteral)
+	if !ok || s0.Value != 3 {
+		t.Errorf("expected first size 3, got %v", decl.Sizes[0])
+	}
+
+	s1, ok := decl.Sizes[1].(*ast.IntegerLiteral)
+	if !ok || s1.Value != 4 {
+		t.Errorf("expected second size 4, got %v", decl.Sizes[1])
+	}
+
+	if decl.Type != "INT" {
+		t.Errorf("expected type INT, got %s", decl.Type)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "grid" {
+		t.Errorf("expected name 'grid', got %v", decl.Names)
+	}
+}
+
+func TestMultiDimChanArrayDecl(t *testing.T) {
+	input := `[2][3]CHAN OF INT links:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	decl, ok := program.Statements[0].(*ast.ChanDecl)
+	if !ok {
+		t.Fatalf("expected ChanDecl, got %T", program.Statements[0])
+	}
+
+	if len(decl.Sizes) != 2 {
+		t.Fatalf("expected 2 dimensions, got %d", len(decl.Sizes))
+	}
+
+	s0, ok := decl.Sizes[0].(*ast.IntegerLiteral)
+	if !ok || s0.Value != 2 {
+		t.Errorf("expected first size 2, got %v", decl.Sizes[0])
+	}
+
+	s1, ok := decl.Sizes[1].(*ast.IntegerLiteral)
+	if !ok || s1.Value != 3 {
+		t.Errorf("expected second size 3, got %v", decl.Sizes[1])
+	}
+
+	if decl.ElemType != "INT" {
+		t.Errorf("expected ElemType INT, got %s", decl.ElemType)
+	}
+
+	if len(decl.Names) != 1 || decl.Names[0] != "links" {
+		t.Errorf("expected name 'links', got %v", decl.Names)
+	}
+}
+
+func TestMultiDimIndexedAssignment(t *testing.T) {
+	input := `grid[i][j] := 42
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assign, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assign.Name != "grid" {
+		t.Errorf("expected name 'grid', got %s", assign.Name)
+	}
+
+	if len(assign.Indices) != 2 {
+		t.Fatalf("expected 2 indices, got %d", len(assign.Indices))
+	}
+
+	idx0, ok := assign.Indices[0].(*ast.Identifier)
+	if !ok || idx0.Value != "i" {
+		t.Errorf("expected first index 'i', got %v", assign.Indices[0])
+	}
+
+	idx1, ok := assign.Indices[1].(*ast.Identifier)
+	if !ok || idx1.Value != "j" {
+		t.Errorf("expected second index 'j', got %v", assign.Indices[1])
+	}
+}
+
+func TestMultiDimIndexedSend(t *testing.T) {
+	input := `cs[i][j] ! 42
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	send, ok := program.Statements[0].(*ast.Send)
+	if !ok {
+		t.Fatalf("expected Send, got %T", program.Statements[0])
+	}
+
+	if send.Channel != "cs" {
+		t.Errorf("expected channel 'cs', got %s", send.Channel)
+	}
+
+	if len(send.ChannelIndices) != 2 {
+		t.Fatalf("expected 2 indices, got %d", len(send.ChannelIndices))
+	}
+}
+
+func TestMultiDimIndexedReceive(t *testing.T) {
+	input := `cs[i][j] ? x
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "cs" {
+		t.Errorf("expected channel 'cs', got %s", recv.Channel)
+	}
+
+	if len(recv.ChannelIndices) != 2 {
+		t.Fatalf("expected 2 indices, got %d", len(recv.ChannelIndices))
+	}
+
+	if recv.Variable != "x" {
+		t.Errorf("expected variable 'x', got %s", recv.Variable)
+	}
+}
+
+func TestMultiDimOpenArrayParam(t *testing.T) {
+	input := `PROC fill([][]CHAN OF INT grid)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+
+	if len(proc.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(proc.Params))
+	}
+
+	p0 := proc.Params[0]
+	if p0.ChanArrayDims != 2 {
+		t.Errorf("expected ChanArrayDims=2, got %d", p0.ChanArrayDims)
+	}
+	if !p0.IsChan {
+		t.Error("expected IsChan=true")
+	}
+	if p0.ChanElemType != "INT" {
+		t.Errorf("expected ChanElemType=INT, got %s", p0.ChanElemType)
 	}
 }

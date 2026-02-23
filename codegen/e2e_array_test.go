@@ -333,3 +333,75 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_MultiDimArray(t *testing.T) {
+	// 2D array: declare, fill with SEQ loops, read back
+	occam := `SEQ
+  [3][4]INT grid:
+  SEQ i = 0 FOR 3
+    SEQ j = 0 FOR 4
+      grid[i][j] := (i * 10) + j
+  SEQ i = 0 FOR 3
+    SEQ j = 0 FOR 4
+      print.int(grid[i][j])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n1\n2\n3\n10\n11\n12\n13\n20\n21\n22\n23\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiDimChanArray(t *testing.T) {
+	// 2D channel array: send/receive
+	occam := `SEQ
+  [2][3]CHAN OF INT cs:
+  INT sum:
+  sum := 0
+  PAR
+    SEQ i = 0 FOR 2
+      SEQ j = 0 FOR 3
+        cs[i][j] ! (i * 10) + j
+    SEQ
+      SEQ i = 0 FOR 2
+        SEQ j = 0 FOR 3
+          INT x:
+          cs[i][j] ? x
+          sum := sum + x
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	// sum = 0+1+2+10+11+12 = 36
+	expected := "36\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiDimChanArrayWithProc(t *testing.T) {
+	// Pass 2D channel array to a PROC
+	occam := `PROC fill([][]CHAN OF INT grid, VAL INT rows, VAL INT cols)
+  SEQ i = 0 FOR rows
+    SEQ j = 0 FOR cols
+      grid[i][j] ! (i * 100) + j
+:
+SEQ
+  [2][3]CHAN OF INT cs:
+  INT sum:
+  sum := 0
+  PAR
+    fill(cs, 2, 3)
+    SEQ i = 0 FOR 2
+      SEQ j = 0 FOR 3
+        INT v:
+        cs[i][j] ? v
+        sum := sum + v
+  print.int(sum)
+`
+	output := transpileCompileRun(t, occam)
+	// sum = 0+1+2+100+101+102 = 306
+	expected := "306\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

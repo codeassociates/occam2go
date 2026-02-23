@@ -799,11 +799,17 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 	switch s := stmt.(type) {
 	case *ast.Assignment:
-		return g.exprNeedsMath(s.Value) || g.exprNeedsMath(s.Index)
+		result := g.exprNeedsMath(s.Value)
+		for _, idx := range s.Indices {
+			result = result || g.exprNeedsMath(idx)
+		}
+		return result
 	case *ast.MultiAssignment:
 		for _, t := range s.Targets {
-			if g.exprNeedsMath(t.Index) {
-				return true
+			for _, idx := range t.Indices {
+				if g.exprNeedsMath(idx) {
+					return true
+				}
 			}
 		}
 		for _, v := range s.Values {
@@ -1116,20 +1122,70 @@ func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 
 func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	goType := g.occamTypeToGo(decl.ElemType)
-	if decl.IsArray {
+	if len(decl.Sizes) > 0 {
 		for _, name := range decl.Names {
 			n := goIdent(name)
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("%s := make([]chan %s, ", n, goType))
-			g.generateExpression(decl.Size)
-			g.write(")\n")
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write(fmt.Sprintf("for _i := range %s { %s[_i] = make(chan %s) }\n", n, n, goType))
+			g.generateMultiDimChanInit(n, goType, decl.Sizes, 0)
 		}
 	} else {
 		for _, name := range decl.Names {
 			g.writeLine(fmt.Sprintf("%s := make(chan %s)", goIdent(name), goType))
 		}
+	}
+}
+
+// generateMultiDimChanInit generates nested make+init loops for multi-dimensional channel arrays.
+// For [w][h]CHAN OF INT link: generates:
+//
+//	link := make([][]chan int, w)
+//	for _i0 := range link { link[_i0] = make([]chan int, h)
+//	    for _i1 := range link[_i0] { link[_i0][_i1] = make(chan int) }
+//	}
+func (g *Generator) generateMultiDimChanInit(name, goType string, sizes []ast.Expression, depth int) {
+	if depth == 0 {
+		// Top-level: name := make([]...[]chan goType, sizes[0])
+		sliceType := strings.Repeat("[]", len(sizes)) + "chan " + goType
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s := make(%s, ", name, sliceType))
+		g.generateExpression(sizes[0])
+		g.write(")\n")
+		if len(sizes) == 1 {
+			// Single dim: init each channel
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for _i0 := range %s { %s[_i0] = make(chan %s) }\n", name, name, goType))
+		} else {
+			// Multi dim: recurse
+			ivar := "_i0"
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := range %s {\n", ivar, name))
+			g.indent++
+			g.generateMultiDimChanInit(name+"["+ivar+"]", goType, sizes, 1)
+			g.indent--
+			g.writeLine("}")
+		}
+	} else if depth < len(sizes)-1 {
+		// Middle dimension: allocate sub-slice
+		sliceType := strings.Repeat("[]", len(sizes)-depth) + "chan " + goType
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s = make(%s, ", name, sliceType))
+		g.generateExpression(sizes[depth])
+		g.write(")\n")
+		ivar := fmt.Sprintf("_i%d", depth)
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := range %s {\n", ivar, name))
+		g.indent++
+		g.generateMultiDimChanInit(name+"["+ivar+"]", goType, sizes, depth+1)
+		g.indent--
+		g.writeLine("}")
+	} else {
+		// Innermost dimension: allocate sub-slice + init channels
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s = make([]chan %s, ", name, goType))
+		g.generateExpression(sizes[depth])
+		g.write(")\n")
+		ivar := fmt.Sprintf("_i%d", depth)
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := range %s { %s[%s] = make(chan %s) }\n", ivar, name, name, ivar, goType))
 	}
 }
 
@@ -1147,21 +1203,88 @@ func (g *Generator) generateArrayDecl(decl *ast.ArrayDecl) {
 	goType := g.occamTypeToGo(decl.Type)
 	for _, name := range decl.Names {
 		n := goIdent(name)
+		if len(decl.Sizes) == 1 {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("%s := make([]%s, ", n, goType))
+			g.generateExpression(decl.Sizes[0])
+			g.write(")\n")
+		} else {
+			g.generateMultiDimArrayInit(n, goType, decl.Sizes, 0)
+		}
+	}
+}
+
+// generateMultiDimArrayInit generates nested make+init loops for multi-dimensional arrays.
+// For [5][3]INT arr: generates:
+//
+//	arr := make([][]int, 5)
+//	for _i0 := range arr { arr[_i0] = make([]int, 3) }
+func (g *Generator) generateMultiDimArrayInit(name, goType string, sizes []ast.Expression, depth int) {
+	if depth == 0 {
+		sliceType := strings.Repeat("[]", len(sizes)) + goType
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		g.write(fmt.Sprintf("%s := make([]%s, ", n, goType))
-		g.generateExpression(decl.Size)
+		g.write(fmt.Sprintf("%s := make(%s, ", name, sliceType))
+		g.generateExpression(sizes[0])
+		g.write(")\n")
+		if len(sizes) > 1 {
+			ivar := "_i0"
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write(fmt.Sprintf("for %s := range %s {\n", ivar, name))
+			g.indent++
+			g.generateMultiDimArrayInit(name+"["+ivar+"]", goType, sizes, 1)
+			g.indent--
+			g.writeLine("}")
+		}
+	} else if depth < len(sizes)-1 {
+		sliceType := strings.Repeat("[]", len(sizes)-depth) + goType
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s = make(%s, ", name, sliceType))
+		g.generateExpression(sizes[depth])
+		g.write(")\n")
+		ivar := fmt.Sprintf("_i%d", depth)
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("for %s := range %s {\n", ivar, name))
+		g.indent++
+		g.generateMultiDimArrayInit(name+"["+ivar+"]", goType, sizes, depth+1)
+		g.indent--
+		g.writeLine("}")
+	} else {
+		// Innermost dimension
+		g.builder.WriteString(strings.Repeat("\t", g.indent))
+		g.write(fmt.Sprintf("%s = make([]%s, ", name, goType))
+		g.generateExpression(sizes[depth])
 		g.write(")\n")
 	}
+}
+
+// generateIndices emits [idx1][idx2]... for multi-dimensional index access.
+func (g *Generator) generateIndices(indices []ast.Expression) {
+	for _, idx := range indices {
+		g.write("[")
+		g.generateExpression(idx)
+		g.write("]")
+	}
+}
+
+// generateIndicesStr generates indices into a buffer and returns the string.
+func (g *Generator) generateIndicesStr(indices []ast.Expression) string {
+	var buf strings.Builder
+	for _, idx := range indices {
+		buf.WriteString("[")
+		oldBuilder := g.builder
+		g.builder = strings.Builder{}
+		g.generateExpression(idx)
+		buf.WriteString(g.builder.String())
+		g.builder = oldBuilder
+		buf.WriteString("]")
+	}
+	return buf.String()
 }
 
 func (g *Generator) generateSend(send *ast.Send) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write(goIdent(send.Channel))
-	if send.ChannelIndex != nil {
-		g.write("[")
-		g.generateExpression(send.ChannelIndex)
-		g.write("]")
-	}
+	g.generateIndices(send.ChannelIndices)
 	g.write(" <- ")
 
 	protoName := g.chanProtocols[send.Channel]
@@ -1203,18 +1326,8 @@ func (g *Generator) generateSend(send *ast.Send) {
 
 func (g *Generator) generateReceive(recv *ast.Receive) {
 	chanRef := goIdent(recv.Channel)
-	if recv.ChannelIndex != nil {
-		var buf strings.Builder
-		buf.WriteString(goIdent(recv.Channel))
-		buf.WriteString("[")
-		// Generate the index expression into a temporary buffer
-		oldBuilder := g.builder
-		g.builder = strings.Builder{}
-		g.generateExpression(recv.ChannelIndex)
-		buf.WriteString(g.builder.String())
-		g.builder = oldBuilder
-		buf.WriteString("]")
-		chanRef = buf.String()
+	if len(recv.ChannelIndices) > 0 {
+		chanRef += g.generateIndicesStr(recv.ChannelIndices)
 	}
 
 	if len(recv.Variables) > 0 {
@@ -1294,17 +1407,8 @@ func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
 	protoName := g.chanProtocols[vr.Channel]
 	gProtoName := goIdent(protoName)
 	chanRef := goIdent(vr.Channel)
-	if vr.ChannelIndex != nil {
-		var buf strings.Builder
-		buf.WriteString(goIdent(vr.Channel))
-		buf.WriteString("[")
-		oldBuilder := g.builder
-		g.builder = strings.Builder{}
-		g.generateExpression(vr.ChannelIndex)
-		buf.WriteString(g.builder.String())
-		g.builder = oldBuilder
-		buf.WriteString("]")
-		chanRef = buf.String()
+	if len(vr.ChannelIndices) > 0 {
+		chanRef += g.generateIndicesStr(vr.ChannelIndices)
 	}
 	g.writeLine(fmt.Sprintf("switch _v := (<-%s).(type) {", chanRef))
 	for _, vc := range vr.Cases {
@@ -1353,7 +1457,7 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 	case *ast.ProcDecl:
 		// Register PROC param channels (including channel array params)
 		for _, p := range s.Params {
-			if p.IsChan || p.IsChanArray {
+			if p.IsChan || p.ChanArrayDims > 0 {
 				if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 					g.chanProtocols[p.Name] = p.ChanElemType
 				}
@@ -1599,18 +1703,20 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 		return
 	}
 
-	if assign.Index != nil {
-		// Check if this is a record field access
-		if _, ok := g.recordVars[assign.Name]; ok {
-			if ident, ok := assign.Index.(*ast.Identifier); ok {
-				// Record field: p.x = value (Go auto-dereferences pointers)
-				g.write(goIdent(assign.Name))
-				g.write(".")
-				g.write(goIdent(ident.Value))
-				g.write(" = ")
-				g.generateExpression(assign.Value)
-				g.write("\n")
-				return
+	if len(assign.Indices) > 0 {
+		// Check if this is a record field access (single index that is an identifier)
+		if len(assign.Indices) == 1 {
+			if _, ok := g.recordVars[assign.Name]; ok {
+				if ident, ok := assign.Indices[0].(*ast.Identifier); ok {
+					// Record field: p.x = value (Go auto-dereferences pointers)
+					g.write(goIdent(assign.Name))
+					g.write(".")
+					g.write(goIdent(ident.Value))
+					g.write(" = ")
+					g.generateExpression(assign.Value)
+					g.write("\n")
+					return
+				}
 			}
 		}
 		// Array index: dereference if ref param
@@ -1618,9 +1724,7 @@ func (g *Generator) generateAssignment(assign *ast.Assignment) {
 			g.write("*")
 		}
 		g.write(goIdent(assign.Name))
-		g.write("[")
-		g.generateExpression(assign.Index)
-		g.write("]")
+		g.generateIndices(assign.Indices)
 	} else {
 		// Simple assignment: dereference if ref param
 		if g.refParams[assign.Name] {
@@ -1790,10 +1894,10 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
 		} else if c.Guard != nil {
 			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", goIdent(c.Variable), i))
-		} else if c.ChannelIndex != nil {
-			g.write(fmt.Sprintf("case %s = <-%s[", goIdent(c.Variable), goIdent(c.Channel)))
-			g.generateExpression(c.ChannelIndex)
-			g.write("]:\n")
+		} else if len(c.ChannelIndices) > 0 {
+			g.write(fmt.Sprintf("case %s = <-%s", goIdent(c.Variable), goIdent(c.Channel)))
+			g.generateIndices(c.ChannelIndices)
+			g.write(":\n")
 		} else {
 			g.write(fmt.Sprintf("case %s = <-%s:\n", goIdent(c.Variable), goIdent(c.Channel)))
 		}
@@ -1870,10 +1974,9 @@ func (g *Generator) generateReplicatedAlt(alt *ast.AltBlock) {
 	// Build select case entry
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	g.write("_altCases[_altI] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(")
-	if c.ChannelIndex != nil {
-		g.write(goIdent(c.Channel) + "[")
-		g.generateExpression(c.ChannelIndex)
-		g.write("]")
+	if len(c.ChannelIndices) > 0 {
+		g.write(goIdent(c.Channel))
+		g.generateIndices(c.ChannelIndices)
 	} else {
 		g.write(goIdent(c.Channel))
 	}
@@ -1943,20 +2046,20 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		}
 	}
 	for _, p := range proc.Params {
-		if !p.IsVal && !p.IsChan && !p.IsChanArray && !p.IsOpenArray && p.ArraySize == "" {
+		if !p.IsVal && !p.IsChan && p.ChanArrayDims == 0 && p.OpenArrayDims == 0 && p.ArraySize == "" {
 			newRefParams[p.Name] = true
 		} else {
 			// Own param shadows any inherited ref param with same name
 			delete(newRefParams, p.Name)
 		}
 		// Track BOOL params; delete non-BOOL params that shadow inherited names
-		if p.Type == "BOOL" && !p.IsChan && !p.IsChanArray {
+		if p.Type == "BOOL" && !p.IsChan && p.ChanArrayDims == 0 {
 			newBoolVars[p.Name] = true
 		} else {
 			delete(newBoolVars, p.Name)
 		}
 		// Register chan params with protocol mappings
-		if p.IsChan || p.IsChanArray {
+		if p.IsChan || p.ChanArrayDims > 0 {
 			if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 				g.chanProtocols[p.Name] = p.ChanElemType
 			}
@@ -2037,12 +2140,12 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 	var parts []string
 	for _, p := range params {
 		var goType string
-		if p.IsChanArray {
-			goType = "[]chan " + g.occamTypeToGo(p.ChanElemType)
+		if p.ChanArrayDims > 0 {
+			goType = strings.Repeat("[]", p.ChanArrayDims) + "chan " + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsChan {
 			goType = chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
-		} else if p.IsOpenArray {
-			goType = "[]" + g.occamTypeToGo(p.Type)
+		} else if p.OpenArrayDims > 0 {
+			goType = strings.Repeat("[]", p.OpenArrayDims) + g.occamTypeToGo(p.Type)
 		} else if p.ArraySize != "" {
 			// Fixed-size array parameter: use slice for Go compatibility
 			// (occam [n]TYPE and []TYPE both map to Go slices)
@@ -2100,11 +2203,11 @@ func (g *Generator) generateProcCall(call *ast.ProcCall) {
 		}
 		// If this parameter is not VAL (i.e., pass by reference), take address
 		// Channels, channel arrays, open arrays, and fixed-size arrays (mapped to slices) are already reference types
-		if i < len(params) && !params[i].IsVal && !params[i].IsChan && !params[i].IsChanArray && !params[i].IsOpenArray && params[i].ArraySize == "" {
+		if i < len(params) && !params[i].IsVal && !params[i].IsChan && params[i].ChanArrayDims == 0 && params[i].OpenArrayDims == 0 && params[i].ArraySize == "" {
 			g.write("&")
 		}
 		// Wrap string literals with []byte() when passed to []BYTE parameters
-		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].IsOpenArray && params[i].Type == "BYTE" {
+		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].OpenArrayDims > 0 && params[i].Type == "BYTE" {
 			g.write("[]byte(")
 			g.generateExpression(arg)
 			g.write(")")
@@ -2140,7 +2243,7 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 		}
 	}
 	for _, p := range fn.Params {
-		if p.Type == "BOOL" && !p.IsChan && !p.IsChanArray {
+		if p.Type == "BOOL" && !p.IsChan && p.ChanArrayDims == 0 {
 			newBoolVars[p.Name] = true
 		} else {
 			delete(newBoolVars, p.Name)
@@ -2196,7 +2299,7 @@ func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
 			g.write(", ")
 		}
 		// Wrap string literals with []byte() when passed to []BYTE parameters
-		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].IsOpenArray && params[i].Type == "BYTE" {
+		if _, isStr := arg.(*ast.StringLiteral); isStr && i < len(params) && params[i].OpenArrayDims > 0 && params[i].Type == "BYTE" {
 			g.write("[]byte(")
 			g.generateExpression(arg)
 			g.write(")")
@@ -2213,14 +2316,16 @@ func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
 		if i > 0 {
 			g.write(", ")
 		}
-		if target.Index != nil {
-			// Check if this is a record field access
-			if _, ok := g.recordVars[target.Name]; ok {
-				if ident, ok := target.Index.(*ast.Identifier); ok {
-					g.write(goIdent(target.Name))
-					g.write(".")
-					g.write(goIdent(ident.Value))
-					continue
+		if len(target.Indices) > 0 {
+			// Check if this is a record field access (single index that is an identifier)
+			if len(target.Indices) == 1 {
+				if _, ok := g.recordVars[target.Name]; ok {
+					if ident, ok := target.Indices[0].(*ast.Identifier); ok {
+						g.write(goIdent(target.Name))
+						g.write(".")
+						g.write(goIdent(ident.Value))
+						continue
+					}
 				}
 			}
 			if g.refParams[target.Name] {
@@ -2230,9 +2335,7 @@ func (g *Generator) generateMultiAssignment(stmt *ast.MultiAssignment) {
 			} else {
 				g.write(goIdent(target.Name))
 			}
-			g.write("[")
-			g.generateExpression(target.Index)
-			g.write("]")
+			g.generateIndices(target.Indices)
 		} else {
 			if g.refParams[target.Name] {
 				g.write("*")
@@ -2868,7 +2971,11 @@ func (g *Generator) containsAltReplicator(stmt ast.Statement) bool {
 func (g *Generator) walkStatements(stmt ast.Statement, fn func(ast.Expression) bool) bool {
 	switch s := stmt.(type) {
 	case *ast.Assignment:
-		return g.walkExpr(s.Value, fn) || g.walkExpr(s.Index, fn)
+		result := g.walkExpr(s.Value, fn)
+		for _, idx := range s.Indices {
+			result = result || g.walkExpr(idx, fn)
+		}
+		return result
 	case *ast.MultiAssignment:
 		for _, v := range s.Values {
 			if g.walkExpr(v, fn) {

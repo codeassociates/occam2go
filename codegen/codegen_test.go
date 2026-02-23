@@ -587,7 +587,7 @@ func TestChanArrayDeclGen(t *testing.T) {
 	if !strings.Contains(output, "cs := make([]chan int, 5)") {
 		t.Errorf("expected 'cs := make([]chan int, 5)' in output, got:\n%s", output)
 	}
-	if !strings.Contains(output, "for _i := range cs { cs[_i] = make(chan int) }") {
+	if !strings.Contains(output, "for _i0 := range cs { cs[_i0] = make(chan int) }") {
 		t.Errorf("expected init loop in output, got:\n%s", output)
 	}
 }
@@ -786,5 +786,69 @@ func TestGoIdentByteReserved(t *testing.T) {
 	output := transpile(t, input)
 	if !strings.Contains(output, "_byte") {
 		t.Errorf("expected '_byte' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimArrayDeclCodegen(t *testing.T) {
+	input := `[3][4]INT grid:
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "grid := make([][]int, 3)") {
+		t.Errorf("expected 'grid := make([][]int, 3)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "grid[_i0] = make([]int, 4)") {
+		t.Errorf("expected 'grid[_i0] = make([]int, 4)' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimChanDeclCodegen(t *testing.T) {
+	input := `[2][3]CHAN OF INT links:
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "links := make([][]chan int, 2)") {
+		t.Errorf("expected 'links := make([][]chan int, 2)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "links[_i0] = make([]chan int, 3)") {
+		t.Errorf("expected 'links[_i0] = make([]chan int, 3)' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "make(chan int)") {
+		t.Errorf("expected 'make(chan int)' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimSendCodegen(t *testing.T) {
+	input := `cs[i][j] ! 42
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "cs[i][j] <- 42") {
+		t.Errorf("expected 'cs[i][j] <- 42' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimReceiveCodegen(t *testing.T) {
+	input := `cs[i][j] ? x
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "x = <-cs[i][j]") {
+		t.Errorf("expected 'x = <-cs[i][j]' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimAssignmentCodegen(t *testing.T) {
+	input := `grid[i][j] := 42
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "grid[i][j] = 42") {
+		t.Errorf("expected 'grid[i][j] = 42' in output, got:\n%s", output)
+	}
+}
+
+func TestMultiDimProcParamCodegen(t *testing.T) {
+	input := `PROC fill([][]CHAN OF INT grid)
+  SKIP
+`
+	output := transpile(t, input)
+	if !strings.Contains(output, "func fill(grid [][]chan int)") {
+		t.Errorf("expected 'func fill(grid [][]chan int)' in output, got:\n%s", output)
 	}
 }
