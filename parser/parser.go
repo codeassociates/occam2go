@@ -417,12 +417,13 @@ func (p *Parser) parseAbbreviation() ast.Statement {
 	}
 
 	return &ast.Abbreviation{
-		Token:       token,
-		IsVal:       true,
-		IsOpenArray: isOpenArray,
-		Type:        typeName,
-		Name:        name,
-		Value:       value,
+		Token:        token,
+		IsVal:        true,
+		IsOpenArray:  isOpenArray,
+		IsFixedArray: isArray,
+		Type:         typeName,
+		Name:         name,
+		Value:        value,
 	}
 }
 

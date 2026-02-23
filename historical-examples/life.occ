@@ -4,6 +4,35 @@
 --
 --  The program in this chapter plays Life on a terminal screen.
 --
+--  Adapted for occam2go: replaced book-library functions
+--  (write.string, write.formatted, DATA.ITEM) with inline
+--  definitions; added terminal.keyboard/terminal.screen declarations.
+--
+
+--
+--  helper procedures (replaces book standard library)
+--
+
+PROC write.string(CHAN OF BYTE out!, VAL []BYTE s)
+  SEQ i = 0 FOR SIZE s
+    out ! s[i]
+:
+
+PROC write.small.int(CHAN OF BYTE out!, VAL INT n)
+  -- outputs a small non-negative integer (0..999) as decimal digits
+  IF
+    n >= 100
+      SEQ
+        out ! BYTE ((n / 100) + (INT '0'))
+        out ! BYTE (((n / 10) \ 10) + (INT '0'))
+        out ! BYTE ((n \ 10) + (INT '0'))
+    n >= 10
+      SEQ
+        out ! BYTE ((n / 10) + (INT '0'))
+        out ! BYTE ((n \ 10) + (INT '0'))
+    TRUE
+      out ! BYTE (n + (INT '0'))
+:
 
 --
 --  configuration constants
@@ -120,19 +149,25 @@ PROC cell([][][]CHAN OF STATE link,
 --  terminal-dependent output routines
 --
 
-PROC clear.screen(CHAN OF BYTE terminal)
-  -- clear screen sequence for an ANSI terminal
-  write.string(terminal, "*#1B[2J")
+PROC clear.screen(CHAN OF BYTE terminal!)
+  -- clear screen sequence for an ANSI terminal: ESC [ 2 J
+  SEQ
+    terminal ! BYTE #1B
+    terminal ! '['
+    terminal ! '2'
+    terminal ! 'J'
 :
 
-PROC move.cursor(CHAN OF BYTE terminal, VAL INT x, y)
+PROC move.cursor(CHAN OF BYTE terminal!, VAL INT x, y)
   -- left-handed co-ordinates, origin 0,0 at top left
-  CHAN OF DATA.ITEM c :
-  PAR
-    write.formatted(terminal, "*#1B[%d;%dH", c)
-    SEQ
-      c ! data.int; y + 1
-      c ! data.int; x + 1
+  -- outputs ANSI escape sequence: ESC [ row ; col H
+  SEQ
+    terminal ! BYTE #1B
+    terminal ! '['
+    write.small.int(terminal, y + 1)
+    terminal ! ';'
+    write.small.int(terminal, x + 1)
+    terminal ! 'H'
 :
 
 
@@ -142,16 +177,16 @@ PROC move.cursor(CHAN OF BYTE terminal, VAL INT x, y)
 --  display routines
 --
 
-PROC initialize.display(CHAN OF BYTE screen)
+PROC initialize.display(CHAN OF BYTE screen!)
   -- display an entirely dead board
   clear.screen(screen)
 :
 
-PROC clean.up.display(CHAN OF BYTE screen)
+PROC clean.up.display(CHAN OF BYTE screen!)
   move.cursor(screen, 0, array.height)
 :
 
-PROC display.state(CHAN OF BYTE screen, VAL INT x, y, VAL BOOL state)
+PROC display.state(CHAN OF BYTE screen!, VAL INT x, y, VAL BOOL state)
   SEQ
     move.cursor(screen, x, y)
     IF
@@ -189,7 +224,7 @@ INT FUNCTION new.activity(VAL BYTE char)
     RESULT activity
 :
 
-PROC display.activity(CHAN OF BYTE screen, VAL INT activity)
+PROC display.activity(CHAN OF BYTE screen!, VAL INT activity)
   SEQ
     move.cursor(screen, array.width+1, array.height/2)
     CASE activity
@@ -209,7 +244,7 @@ PROC display.activity(CHAN OF BYTE screen, VAL INT activity)
 --  generation
 --
 
-PROC generation(CHAN OF BYTE screen,
+PROC generation(CHAN OF BYTE screen!,
                 [][]CHAN OF COMMAND control,
                 [][]CHAN OF RESPONSE sense,
                 BOOL active                 )
@@ -291,7 +326,7 @@ INT FUNCTION max(VAL INT a, b)
 
 
 
-PROC editor(CHAN OF BYTE keyboard, screen,
+PROC editor(CHAN OF BYTE keyboard?, screen!,
             [][]CHAN OF COMMAND control   )
   INT x, y :
   BOOL editing :
@@ -346,7 +381,7 @@ PROC editor(CHAN OF BYTE keyboard, screen,
 --  controller
 --
 
-PROC controller(CHAN OF BYTE keyboard, screen,
+PROC controller(CHAN OF BYTE keyboard?, screen!,
                 [][]CHAN OF COMMAND control,
                 [][]CHAN OF RESPONSE sense    )
   INT activity :
@@ -397,20 +432,22 @@ PROC controller(CHAN OF BYTE keyboard, screen,
 --  structure of the program
 --
 
-[array.width][array.height][neighbours]CHAN OF STATE link :
-[array.width][array.height]CHAN OF COMMAND control :
-[array.width][array.height]CHAN OF RESPONSE sense :
-PAR
-  controller(terminal.keyboard, terminal.screen, control, sense)
-  PAR x = 0 FOR array.width
-    PAR y = 0 FOR array.height
-      VAL INT left  IS ((x - 1) + array.width)  \ array.width  :
-      VAL INT right IS  (x + 1)                 \ array.width  :
-      VAL INT up    IS  (y + 1)                 \ array.height :
-      VAL INT down  IS ((y - 1) + array.height) \ array.height :
-      VAL [neighbours]INT nx IS
-            [ right, x,    left, left, left, x,  right, right ] :
-      VAL [neighbours]INT ny IS
-            [ down,  down, down, y,    up,   up, up,    y     ] :
-      cell(link, x, y, nx, ny, control[x][y], sense[x][y])
+PROC life (CHAN BYTE keyboard?, screen!, error!)
+  [array.width][array.height][neighbours]CHAN OF STATE link :
+  [array.width][array.height]CHAN OF COMMAND control :
+  [array.width][array.height]CHAN OF RESPONSE sense :
+  PAR
+    controller(keyboard, screen, control, sense)
+    PAR x = 0 FOR array.width
+      PAR y = 0 FOR array.height
+        VAL INT left  IS ((x - 1) + array.width)  \ array.width  :
+        VAL INT right IS  (x + 1)                 \ array.width  :
+        VAL INT up    IS  (y + 1)                 \ array.height :
+        VAL INT down  IS ((y - 1) + array.height) \ array.height :
+        VAL [neighbours]INT nx IS
+              [ right, x,    left, left, left, x,  right, right ] :
+        VAL [neighbours]INT ny IS
+              [ down,  down, down, y,    up,   up, up,    y     ] :
+        cell(link, x, y, nx, ny, control[x][y], sense[x][y])
+:
 
