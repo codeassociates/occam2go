@@ -375,3 +375,41 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_CaseCommaValues(t *testing.T) {
+	// Issue #75: comma-separated match values in CASE
+	occam := `SEQ
+  INT x:
+  x := 2
+  CASE x
+    1, 2
+      print.int(10)
+    3, 4
+      print.int(20)
+    ELSE
+      print.int(0)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_CaseCommaValuesElse(t *testing.T) {
+	// Issue #75: ELSE branch with comma-separated values
+	occam := `SEQ
+  INT x:
+  x := 5
+  CASE x
+    1, 2, 3
+      print.int(10)
+    ELSE
+      print.int(99)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

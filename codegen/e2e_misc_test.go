@@ -185,6 +185,83 @@ func TestE2E_AltWithTrueGuard(t *testing.T) {
 	}
 }
 
+func TestE2E_AltWithParenthesizedGuard(t *testing.T) {
+	// Issue #78: parenthesized guard expression in ALT
+	occam := `SEQ
+  CHAN OF INT c1:
+  CHAN OF INT c2:
+  INT result:
+  INT mode:
+  mode := 1
+  PAR
+    c2 ! 77
+    ALT
+      (mode <> 1) & c1 ? result
+        SKIP
+      (mode <> 0) & c2 ? result
+        SKIP
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "77\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AltGuardedSkip(t *testing.T) {
+	// Issue #78: guard & SKIP in ALT (always-ready alternative)
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  BOOL ready:
+  ready := TRUE
+  result := 0
+  PAR
+    SEQ
+      ALT
+        ready & SKIP
+          SKIP
+      c ! 42
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiLineAbbreviation(t *testing.T) {
+	// Issue #79: IS at end of line as continuation
+	occam := `SEQ
+  VAL INT x IS
+    42 :
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiLineAbbreviationExpr(t *testing.T) {
+	// Issue #79: IS continuation with complex expression
+	occam := `SEQ
+  VAL INT a IS 10 :
+  VAL INT b IS
+    (a + 5) :
+  print.int(b)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_MostNegReal32(t *testing.T) {
 	// MOSTNEG REAL32 → -math.MaxFloat32 (a very large negative number)
 	occam := `SEQ
