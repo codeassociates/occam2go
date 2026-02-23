@@ -453,9 +453,9 @@ type VariantReceive struct {
 }
 
 type VariantCase struct {
-	Tag       string    // variant tag name
-	Variables []string  // variables to bind payload fields
-	Body      Statement
+	Tag       string      // variant tag name
+	Variables []string    // variables to bind payload fields
+	Body      []Statement // case body (may include scoped declarations)
 }
 
 func (vr *VariantReceive) statementNode()       {}

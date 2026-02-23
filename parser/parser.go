@@ -1384,12 +1384,7 @@ func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.Var
 		if p.peekTokenIs(lexer.INDENT) {
 			p.nextToken() // consume INDENT
 			p.nextToken() // move to body
-			vc.Body = p.parseStatement()
-
-			// Advance past the last token of the statement if needed
-			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-				p.nextToken()
-			}
+			vc.Body = p.parseBodyStatements()
 		}
 
 		stmt.Cases = append(stmt.Cases, vc)
@@ -1479,11 +1474,7 @@ func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndices []a
 		if p.peekTokenIs(lexer.INDENT) {
 			p.nextToken() // consume INDENT
 			p.nextToken() // move to body
-			vc.Body = p.parseStatement()
-
-			if !p.curTokenIs(lexer.NEWLINE) && !p.curTokenIs(lexer.DEDENT) && !p.curTokenIs(lexer.EOF) {
-				p.nextToken()
-			}
+			vc.Body = p.parseBodyStatements()
 		}
 
 		stmt.Cases = append(stmt.Cases, vc)
