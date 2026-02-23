@@ -2036,7 +2036,7 @@ func (g *Generator) generateProcParams(params []ast.ProcParam) string {
 	for _, p := range params {
 		var goType string
 		if p.IsChanArray {
-			goType = "[]" + chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
+			goType = "[]chan " + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsChan {
 			goType = chanDirPrefix(p.ChanDir) + g.occamTypeToGo(p.ChanElemType)
 		} else if p.IsOpenArray {

@@ -306,3 +306,30 @@ func TestE2E_MultiAssignmentValues(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ChanArrayDirParam(t *testing.T) {
+	// Channel arrays passed to direction-annotated params must compile
+	// (Go slices are not covariant, so direction is dropped for array params)
+	occam := `PROC sender([]CHAN OF INT out!)
+  SEQ i = 0 FOR SIZE out
+    out[i] ! i
+:
+PROC receiver([]CHAN OF INT in?)
+  SEQ i = 0 FOR SIZE in
+    INT v:
+    SEQ
+      in[i] ? v
+      print.int(v)
+:
+SEQ
+  [3]CHAN OF INT cs:
+  PAR
+    sender(cs)
+    receiver(cs)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n1\n2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
