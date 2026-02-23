@@ -392,3 +392,41 @@ func TestE2E_PriPar(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_ReceiveIntoIndexedVariable(t *testing.T) {
+	occam := `SEQ
+  CHAN OF INT c:
+  [3]INT arr:
+  arr[0] := 0
+  arr[1] := 0
+  arr[2] := 0
+  PAR
+    c ! 42
+    c ? arr[1]
+  print.int(arr[1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_IndexedChannelReceiveIntoIndexedVariable(t *testing.T) {
+	occam := `SEQ
+  [2]CHAN OF INT cs:
+  [3]INT arr:
+  arr[0] := 0
+  arr[1] := 0
+  arr[2] := 0
+  PAR
+    cs[0] ! 99
+    cs[0] ? arr[2]
+  print.int(arr[2])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
