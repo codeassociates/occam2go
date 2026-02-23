@@ -490,3 +490,93 @@ func TestE2E_Int16TypeConversionFromInt(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_BoolToInt(t *testing.T) {
+	occam := `SEQ
+  BOOL a:
+  a := TRUE
+  INT x:
+  x := INT a
+  print.int(x)
+  a := FALSE
+  x := INT a
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n0\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_BoolToByte(t *testing.T) {
+	occam := `SEQ
+  BOOL a:
+  a := TRUE
+  BYTE b:
+  b := BYTE a
+  print.int(INT b)
+  a := FALSE
+  b := BYTE a
+  print.int(INT b)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n0\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_IntToBool(t *testing.T) {
+	occam := `SEQ
+  INT n:
+  n := 42
+  BOOL a:
+  a := BOOL n
+  print.bool(a)
+  n := 0
+  a := BOOL n
+  print.bool(a)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "true\nfalse\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ByteToBool(t *testing.T) {
+	occam := `SEQ
+  BYTE b:
+  b := 1
+  BOOL a:
+  a := BOOL b
+  print.bool(a)
+  b := 0
+  a := BOOL b
+  print.bool(a)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "true\nfalse\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_ComparisonToInt(t *testing.T) {
+	occam := `SEQ
+  INT a, b:
+  a := 5
+  b := 3
+  INT result:
+  result := INT (a > b)
+  print.int(result)
+  result := INT (a < b)
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n0\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

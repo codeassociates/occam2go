@@ -45,7 +45,7 @@
 - **Parenthesized expressions**
 - **Array indexing** — `arr[i]`, `arr[expr]`
 - **String literals** — Double-quoted strings
-- **Type conversions** — `INT expr`, `INT16 expr`, `INT32 expr`, `INT64 expr`, `BYTE expr`, `REAL32 expr`, `REAL64 expr`
+- **Type conversions** — `INT expr`, `INT16 expr`, `INT32 expr`, `INT64 expr`, `BYTE expr`, `BOOL expr`, `REAL32 expr`, `REAL64 expr` (including BOOL↔numeric conversions)
 - **Checked arithmetic** — `PLUS`, `MINUS`, `TIMES` — modular (wrapping) operators
 - **MOSTNEG/MOSTPOS** — Type min/max constants for INT, INT16, INT32, INT64, BYTE, REAL32, REAL64
 - **SIZE operator** — `SIZE arr`, `SIZE "str"` maps to `len()`

@@ -302,7 +302,7 @@ func TestTypeConversion(t *testing.T) {
 		{"x := INT y\n", "x = int(y)"},
 		{"x := BYTE n\n", "x = byte(n)"},
 		{"x := REAL count\n", "x = float64(count)"},
-		{"x := BOOL flag\n", "x = bool(flag)"},
+		{"x := BOOL flag\n", "x = ((flag) != 0)"},
 		{"x := REAL32 y\n", "x = float32(y)"},
 		{"x := REAL64 y\n", "x = float64(y)"},
 		{"x := INT16 y\n", "x = int16(y)"},
@@ -315,6 +315,53 @@ func TestTypeConversion(t *testing.T) {
 		if !strings.Contains(output, tt.expected) {
 			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
 		}
+	}
+}
+
+func TestBoolTypeConversion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// numeric → BOOL
+		{"x := BOOL b\n", "x = ((b) != 0)"},
+		// BOOL comparison → INT (known bool expression)
+		{"x := INT (a = b)\n", "x = _boolToInt((a == b))"},
+		// BOOL comparison → BYTE (known bool expression)
+		{"x := BYTE (a = b)\n", "x = byte(_boolToInt((a == b)))"},
+		// BOOL literal → INT
+		{"x := INT TRUE\n", "x = _boolToInt(true)"},
+		// NOT expr → INT
+		{"x := INT (NOT flag)\n", "x = _boolToInt(!flag)"},
+		// BOOL conversion → INT (nested BOOL target)
+		{"x := INT (BOOL n)\n", "x = _boolToInt(((n) != 0))"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
+
+func TestBoolToNumericHelper(t *testing.T) {
+	// The _boolToInt helper should be emitted when bool→numeric conversion is present
+	input := "x := INT (a = b)\n"
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "func _boolToInt(b bool) int {") {
+		t.Errorf("expected _boolToInt helper in output, got:\n%s", output)
+	}
+}
+
+func TestBoolToNumericHelperNotEmitted(t *testing.T) {
+	// The _boolToInt helper should NOT be emitted when only numeric→bool conversion is present
+	input := "x := BOOL b\n"
+	output := transpile(t, input)
+
+	if strings.Contains(output, "_boolToInt") {
+		t.Errorf("did not expect _boolToInt helper in output, got:\n%s", output)
 	}
 }
 
