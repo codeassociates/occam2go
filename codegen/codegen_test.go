@@ -677,11 +677,14 @@ func TestAbbreviation(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"VAL INT x IS 42:\n", "x := 42"},
-		{"VAL BOOL flag IS TRUE:\n", "flag := true"},
-		{"INT y IS z:\n", "y := z"},
-		{"INITIAL INT x IS 42:\n", "x := 42"},
-		{"INITIAL BOOL done IS FALSE:\n", "done := false"},
+		{"VAL INT x IS 42:\n", "var x int = 42"},
+		{"VAL BOOL flag IS TRUE:\n", "var flag bool = true"},
+		{"INT y IS z:\n", "var y int = z"},
+		{"INITIAL INT x IS 42:\n", "var x int = 42"},
+		{"INITIAL BOOL done IS FALSE:\n", "var done bool = false"},
+		{"VAL BYTE x IS 1:\n", "var x byte = 1"},
+		{"VAL INT16 x IS 42:\n", "var x int16 = 42"},
+		{"INITIAL BYTE done IS 0:\n", "var done byte = 0"},
 	}
 
 	for _, tt := range tests {
