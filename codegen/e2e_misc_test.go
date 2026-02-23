@@ -233,6 +233,59 @@ func TestE2E_AltGuardedSkip(t *testing.T) {
 	}
 }
 
+func TestE2E_AltGuardedSkipTrue(t *testing.T) {
+	// Issue #77: ALT with channel case and guarded SKIP where guard is TRUE
+	// The SKIP fires immediately, then the channel send proceeds
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  BOOL ready:
+  ready := TRUE
+  result := 0
+  PAR
+    SEQ
+      ALT
+        ready & SKIP
+          result := 99
+        c ? result
+          SKIP
+      c ! 42
+    c ? result
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_AltGuardedSkipFalse(t *testing.T) {
+	// Issue #77: ALT with channel case and guarded SKIP where guard is FALSE
+	// The SKIP guard is false, so the channel case fires
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  BOOL ready:
+  ready := FALSE
+  result := 0
+  PAR
+    SEQ
+      ALT
+        ready & SKIP
+          result := 99
+        c ? result
+          SKIP
+    c ! 77
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "77\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_MultiLineAbbreviation(t *testing.T) {
 	// Issue #79: IS at end of line as continuation
 	occam := `SEQ

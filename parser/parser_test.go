@@ -349,6 +349,38 @@ func TestAltBlockWithGuard(t *testing.T) {
 	}
 }
 
+func TestAltBlockWithGuardedSkip(t *testing.T) {
+	input := `ALT
+  ready & SKIP
+    some.proc()
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if len(alt.Cases) != 1 {
+		t.Fatalf("expected 1 case, got %d", len(alt.Cases))
+	}
+
+	c := alt.Cases[0]
+	if !c.IsSkip {
+		t.Error("expected IsSkip to be true")
+	}
+	if c.Guard == nil {
+		t.Error("expected guard expression, got nil")
+	}
+}
+
 func TestWhileLoop(t *testing.T) {
 	input := `WHILE x > 0
   x := x - 1

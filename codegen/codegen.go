@@ -1902,8 +1902,20 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.write(fmt.Sprintf("case %s = <-%s:\n", goIdent(c.Variable), goIdent(c.Channel)))
 		}
 		g.indent++
+		guardedSkip := c.IsSkip && c.Guard != nil
+		if guardedSkip {
+			g.builder.WriteString(strings.Repeat("\t", g.indent))
+			g.write("if ")
+			g.generateExpression(c.Guard)
+			g.write(" {\n")
+			g.indent++
+		}
 		for _, s := range c.Body {
 			g.generateStatement(s)
+		}
+		if guardedSkip {
+			g.indent--
+			g.writeLine("}")
 		}
 		g.indent--
 	}
