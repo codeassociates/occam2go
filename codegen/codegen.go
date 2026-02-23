@@ -1896,7 +1896,7 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 				if t, ok := g.chanElemTypes[c.Channel]; ok {
 					elemType = t
 				}
-				g.write(fmt.Sprintf("var _alt%d chan %s = nil\n", i, elemType))
+				g.write(fmt.Sprintf("var _alt%d <-chan %s = nil\n", i, elemType))
 				g.builder.WriteString(strings.Repeat("\t", g.indent))
 				g.write(fmt.Sprintf("if "))
 				g.generateExpression(c.Guard)
