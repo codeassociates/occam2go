@@ -114,6 +114,8 @@ Six packages, one pipeline:
 | `cs[i] ! 42` | `cs[i] <- 42` |
 | `cs[i] ? x` | `x = <-cs[i]` |
 | `PROC f([]CHAN OF INT cs)` | `func f(cs []chan int)` |
+| `PROC f([]CHAN OF INT cs?)` | `func f(cs []chan int)` (direction dropped for array params) |
+| `PROC f([]CHAN OF INT cs!)` | `func f(cs []chan int)` (direction dropped for array params) |
 | `PROC f(CHAN OF INT c?)` | `func f(c <-chan int)` (input/receive-only) |
 | `PROC f(CHAN OF INT c!)` | `func f(c chan<- int)` (output/send-only) |
 | `f(out!, in?)` (call-site dir) | `f(out, in)` (direction annotations ignored) |

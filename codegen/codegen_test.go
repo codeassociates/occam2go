@@ -620,11 +620,11 @@ func TestChanArrayDirParamGen(t *testing.T) {
 `
 	output := transpile(t, input)
 
-	if !strings.Contains(output, "cs []<-chan int") {
-		t.Errorf("expected '[]<-chan int' for input chan array, got:\n%s", output)
+	if !strings.Contains(output, "cs []chan int") {
+		t.Errorf("expected '[]chan int' for input chan array, got:\n%s", output)
 	}
-	if !strings.Contains(output, "out []chan<- int") {
-		t.Errorf("expected '[]chan<- int' for output chan array, got:\n%s", output)
+	if !strings.Contains(output, "out []chan int") {
+		t.Errorf("expected '[]chan int' for output chan array, got:\n%s", output)
 	}
 }
 
