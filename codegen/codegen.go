@@ -1906,10 +1906,16 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	// Track reference parameters for this procedure
 	oldRefParams := g.refParams
 	newRefParams := make(map[string]bool)
-	// Inherit parent's ref params for closure captures when nested
+	// Scope boolVars per proc body
+	oldBoolVars := g.boolVars
+	newBoolVars := make(map[string]bool)
+	// Inherit parent's ref params and boolVars for closure captures when nested
 	if g.nestingLevel > 0 {
 		for k, v := range oldRefParams {
 			newRefParams[k] = v
+		}
+		for k, v := range oldBoolVars {
+			newBoolVars[k] = v
 		}
 	}
 	for _, p := range proc.Params {
@@ -1918,6 +1924,12 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		} else {
 			// Own param shadows any inherited ref param with same name
 			delete(newRefParams, p.Name)
+		}
+		// Track BOOL params; delete non-BOOL params that shadow inherited names
+		if p.Type == "BOOL" && !p.IsChan && !p.IsChanArray {
+			newBoolVars[p.Name] = true
+		} else {
+			delete(newBoolVars, p.Name)
 		}
 		// Register chan params with protocol mappings
 		if p.IsChan || p.IsChanArray {
@@ -1933,6 +1945,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		}
 	}
 	g.refParams = newRefParams
+	g.boolVars = newBoolVars
 
 	// Scan proc body for RETYPES declarations that shadow parameters.
 	// When VAL INT X RETYPES X :, Go can't redeclare X in the same scope,
@@ -1992,6 +2005,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 
 	// Restore previous context
 	g.refParams = oldRefParams
+	g.boolVars = oldBoolVars
 	g.retypesRenames = oldRenames
 }
 
@@ -2093,6 +2107,23 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 		returnTypeStr = "(" + strings.Join(goTypes, ", ") + ")"
 	}
 
+	// Scope boolVars per function body
+	oldBoolVars := g.boolVars
+	newBoolVars := make(map[string]bool)
+	if g.nestingLevel > 0 {
+		for k, v := range oldBoolVars {
+			newBoolVars[k] = v
+		}
+	}
+	for _, p := range fn.Params {
+		if p.Type == "BOOL" && !p.IsChan && !p.IsChanArray {
+			newBoolVars[p.Name] = true
+		} else {
+			delete(newBoolVars, p.Name)
+		}
+	}
+	g.boolVars = newBoolVars
+
 	gName := goIdent(fn.Name)
 	if g.nestingLevel > 0 {
 		// Nested FUNCTION: generate as Go closure
@@ -2123,6 +2154,9 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("")
+
+	// Restore previous boolVars
+	g.boolVars = oldBoolVars
 }
 
 func (g *Generator) generateFuncCallExpr(call *ast.FuncCall) {
