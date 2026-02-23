@@ -98,6 +98,8 @@ const (
 	PLUS_KW  // PLUS (modular addition keyword, distinct from + symbol)
 	MINUS_KW // MINUS (modular subtraction keyword, distinct from - symbol)
 	TIMES    // TIMES (modular multiplication keyword)
+	ROUND_KW // ROUND (type conversion qualifier)
+	TRUNC_KW // TRUNC (type conversion qualifier)
 	keyword_end
 )
 
@@ -191,6 +193,8 @@ var tokenNames = map[TokenType]string{
 	PLUS_KW:    "PLUS",
 	MINUS_KW:   "MINUS",
 	TIMES:      "TIMES",
+	ROUND_KW:   "ROUND",
+	TRUNC_KW:   "TRUNC",
 }
 
 var keywords = map[string]TokenType{
@@ -242,6 +246,8 @@ var keywords = map[string]TokenType{
 	"PLUS":     PLUS_KW,
 	"MINUS":    MINUS_KW,
 	"TIMES":    TIMES,
+	"ROUND":    ROUND_KW,
+	"TRUNC":    TRUNC_KW,
 }
 
 func (t TokenType) String() string {

@@ -300,6 +300,7 @@ func (ue *UnaryExpr) TokenLiteral() string { return ue.Token.Literal }
 type TypeConversion struct {
 	Token      lexer.Token // the type token (INT, BYTE, etc.)
 	TargetType string      // "INT", "BYTE", "BOOL", "REAL"
+	Qualifier  string      // "" (none), "ROUND", or "TRUNC"
 	Expr       Expression  // the expression to convert
 }
 

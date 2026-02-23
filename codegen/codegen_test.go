@@ -365,6 +365,45 @@ func TestBoolToNumericHelperNotEmitted(t *testing.T) {
 	}
 }
 
+func TestTypeConversionRoundTrunc(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// float → int with ROUND: uses math.Round
+		{"x := INT ROUND y\n", "x = int(math.Round(float64(y)))"},
+		{"x := INT64 ROUND y\n", "x = int64(math.Round(float64(y)))"},
+		{"x := INT16 ROUND y\n", "x = int16(math.Round(float64(y)))"},
+		// float → int with TRUNC: plain cast (Go default truncates)
+		{"x := INT TRUNC y\n", "x = int(y)"},
+		{"x := INT64 TRUNC y\n", "x = int64(y)"},
+		// int → float with ROUND/TRUNC: qualifier irrelevant, plain cast
+		{"x := REAL32 ROUND y\n", "x = float32(y)"},
+		{"x := REAL64 TRUNC y\n", "x = float64(y)"},
+	}
+
+	for _, tt := range tests {
+		output := transpile(t, tt.input)
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("for input %q: expected %q in output, got:\n%s", tt.input, tt.expected, output)
+		}
+	}
+}
+
+func TestTypeConversionRoundMathImport(t *testing.T) {
+	// INT ROUND should trigger math import
+	output := transpile(t, "x := INT ROUND y\n")
+	if !strings.Contains(output, `"math"`) {
+		t.Errorf("expected math import for INT ROUND, got:\n%s", output)
+	}
+
+	// INT TRUNC should NOT require math import (unless other constructs do)
+	output = transpile(t, "x := INT TRUNC y\n")
+	if strings.Contains(output, `"math"`) {
+		t.Errorf("did not expect math import for INT TRUNC, got:\n%s", output)
+	}
+}
+
 func TestMostNegMostPos(t *testing.T) {
 	tests := []struct {
 		input    string

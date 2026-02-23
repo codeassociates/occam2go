@@ -491,6 +491,101 @@ func TestE2E_Int16TypeConversionFromInt(t *testing.T) {
 	}
 }
 
+func TestE2E_IntRoundFromReal32(t *testing.T) {
+	// 7.0 / 2.0 = 3.5, ROUND → 4
+	occam := `SEQ
+  REAL32 r:
+  r := (REAL32 7) / (REAL32 2)
+  INT x:
+  x := INT ROUND r
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_IntTruncFromReal32(t *testing.T) {
+	// 7.0 / 2.0 = 3.5, TRUNC → 3
+	occam := `SEQ
+  REAL32 r:
+  r := (REAL32 7) / (REAL32 2)
+  INT x:
+  x := INT TRUNC r
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "3\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_IntRoundNegative(t *testing.T) {
+	// -7.0 / 2.0 = -3.5, ROUND → -4
+	occam := `SEQ
+  REAL32 r:
+  r := (REAL32 0) - ((REAL32 7) / (REAL32 2))
+  INT x:
+  x := INT ROUND r
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_IntTruncNegative(t *testing.T) {
+	// -7.0 / 2.0 = -3.5, TRUNC → -3
+	occam := `SEQ
+  REAL32 r:
+  r := (REAL32 0) - ((REAL32 7) / (REAL32 2))
+  INT x:
+  x := INT TRUNC r
+  print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "-3\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Real32RoundFromInt(t *testing.T) {
+	occam := `SEQ
+  INT n:
+  n := 42
+  REAL32 r:
+  r := REAL32 ROUND n
+  print.int(INT TRUNC r)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_Int64RoundFromReal64(t *testing.T) {
+	// 15.0 / 2.0 = 7.5, ROUND → 8 (via INT64)
+	occam := `SEQ
+  REAL64 r:
+  r := (REAL64 15) / (REAL64 2)
+  INT64 x:
+  x := INT64 ROUND r
+  print.int(INT x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "8\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_BoolToInt(t *testing.T) {
 	occam := `SEQ
   BOOL a:
