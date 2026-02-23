@@ -3812,3 +3812,79 @@ func TestMultiDimOpenArrayParam(t *testing.T) {
 		t.Errorf("expected ChanElemType=INT, got %s", p0.ChanElemType)
 	}
 }
+
+func TestVariantReceiveScopedDecl(t *testing.T) {
+	input := `PROTOCOL CMD
+  CASE
+    data; INT
+    evolve
+    quit
+
+PROC test(CHAN OF CMD ch)
+  BOOL done:
+  SEQ
+    done := FALSE
+    WHILE NOT done
+      ch ? CASE
+        data; done
+          SKIP
+        evolve
+          BOOL flag:
+          SEQ
+            flag := TRUE
+            done := flag
+        quit
+          done := TRUE
+:
+`
+	l := lexer.New(input)
+	pr := New(l)
+	program := pr.ParseProgram()
+	checkParserErrors(t, pr)
+
+	// Find the PROC
+	if len(program.Statements) < 2 {
+		t.Fatalf("expected at least 2 statements, got %d", len(program.Statements))
+	}
+	proc, ok := program.Statements[1].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[1])
+	}
+
+	// Walk to the variant receive inside the WHILE
+	// proc body: VarDecl(done), SeqBlock{ assign, WhileLoop{ VariantReceive } }
+	seq, ok := proc.Body[1].(*ast.SeqBlock)
+	if !ok {
+		t.Fatalf("expected SeqBlock, got %T", proc.Body[1])
+	}
+	wl, ok := seq.Statements[1].(*ast.WhileLoop)
+	if !ok {
+		t.Fatalf("expected WhileLoop, got %T", seq.Statements[1])
+	}
+	if len(wl.Body) < 1 {
+		t.Fatalf("expected at least 1 statement in while body, got %d", len(wl.Body))
+	}
+	vr, ok := wl.Body[0].(*ast.VariantReceive)
+	if !ok {
+		t.Fatalf("expected VariantReceive, got %T", wl.Body[0])
+	}
+
+	if len(vr.Cases) != 3 {
+		t.Fatalf("expected 3 variant cases, got %d", len(vr.Cases))
+	}
+
+	// "evolve" case should have 2 body statements: VarDecl + SeqBlock
+	evolveCase := vr.Cases[1]
+	if evolveCase.Tag != "evolve" {
+		t.Errorf("expected tag 'evolve', got %s", evolveCase.Tag)
+	}
+	if len(evolveCase.Body) != 2 {
+		t.Fatalf("expected 2 body statements in 'evolve' case, got %d", len(evolveCase.Body))
+	}
+	if _, ok := evolveCase.Body[0].(*ast.VarDecl); !ok {
+		t.Errorf("expected VarDecl as first body statement, got %T", evolveCase.Body[0])
+	}
+	if _, ok := evolveCase.Body[1].(*ast.SeqBlock); !ok {
+		t.Errorf("expected SeqBlock as second body statement, got %T", evolveCase.Body[1])
+	}
+}

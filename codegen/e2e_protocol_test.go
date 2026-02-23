@@ -174,6 +174,49 @@ SEQ
 	}
 }
 
+func TestE2E_VariantReceiveScopedDecl(t *testing.T) {
+	// Issue #86: scoped declarations in variant receive case bodies
+	occam := `PROTOCOL CMD
+  CASE
+    set.val; INT
+    evolve
+    terminate
+
+PROC test(CHAN OF CMD control)
+  INT state:
+  BOOL running:
+  SEQ
+    state := 0
+    running := TRUE
+    WHILE running
+      control ? CASE
+        set.val; state
+          SKIP
+        evolve
+          INT next:
+          SEQ
+            next := state + 10
+            state := next
+        terminate
+          running := FALSE
+    print.int(state)
+:
+CHAN OF CMD ch:
+SEQ
+  PAR
+    test(ch)
+    SEQ
+      ch ! set.val; 5
+      ch ! evolve
+      ch ! terminate
+`
+	output := transpileCompileRun(t, occam)
+	expected := "15\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_VariantProtocolTrailingColon(t *testing.T) {
 	// Issue #73: trailing colon on variant protocol declarations
 	occam := `PROTOCOL MSG

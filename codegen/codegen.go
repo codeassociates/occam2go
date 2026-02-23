@@ -566,8 +566,10 @@ func (g *Generator) containsPar(stmt ast.Statement) bool {
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsPar(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsPar(inner) {
+					return true
+				}
 			}
 		}
 	}
@@ -639,8 +641,10 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsPrint(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsPrint(inner) {
+					return true
+				}
 			}
 		}
 	}
@@ -715,8 +719,10 @@ func (g *Generator) containsTimer(stmt ast.Statement) bool {
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsTimer(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsTimer(inner) {
+					return true
+				}
 			}
 		}
 	}
@@ -788,8 +794,10 @@ func (g *Generator) containsStop(stmt ast.Statement) bool {
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsStop(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsStop(inner) {
+					return true
+				}
 			}
 		}
 	}
@@ -909,8 +917,10 @@ func (g *Generator) containsMostExpr(stmt ast.Statement) bool {
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.containsMostExpr(c.Body) {
-				return true
+			for _, inner := range c.Body {
+				if g.containsMostExpr(inner) {
+					return true
+				}
 			}
 		}
 	}
@@ -1417,8 +1427,8 @@ func (g *Generator) generateVariantReceive(vr *ast.VariantReceive) {
 		for i, v := range vc.Variables {
 			g.writeLine(fmt.Sprintf("%s = _v._%d", goIdent(v), i))
 		}
-		if vc.Body != nil {
-			g.generateStatement(vc.Body)
+		for _, s := range vc.Body {
+			g.generateStatement(s)
 		}
 		g.indent--
 	}
@@ -3084,8 +3094,10 @@ func (g *Generator) walkStatements(stmt ast.Statement, fn func(ast.Expression) b
 		}
 	case *ast.VariantReceive:
 		for _, c := range s.Cases {
-			if c.Body != nil && g.walkStatements(c.Body, fn) {
-				return true
+			for _, inner := range c.Body {
+				if g.walkStatements(inner, fn) {
+					return true
+				}
 			}
 		}
 	}
