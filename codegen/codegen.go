@@ -18,7 +18,8 @@ type Generator struct {
 	needMath bool // track if we need math package import
 	needMathBits bool // track if we need math/bits package import
 	needBufio    bool // track if we need bufio package import
-	needReflect  bool // track if we need reflect package import
+	needReflect    bool // track if we need reflect package import
+	needBoolHelper bool // track if we need _boolToInt helper
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -33,6 +34,9 @@ type Generator struct {
 	// Record support
 	recordDefs map[string]*ast.RecordDecl
 	recordVars map[string]string // variable name → record type name
+
+	// Bool variable tracking (for type conversion codegen)
+	boolVars map[string]bool
 
 	// Nesting level: 0 = package level, >0 = inside a function
 	nestingLevel int
@@ -97,6 +101,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needMathBits = false
 	g.needBufio = false
 	g.needReflect = false
+	g.needBoolHelper = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -104,6 +109,12 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.tmpCounter = 0
 	g.recordDefs = make(map[string]*ast.RecordDecl)
 	g.recordVars = make(map[string]string)
+	g.boolVars = make(map[string]bool)
+
+	// Pre-pass: collect BOOL variable names (needed before containsBoolConversion)
+	for _, stmt := range program.Statements {
+		g.collectBoolVars(stmt)
+	}
 
 	// First pass: collect procedure signatures, protocols, and check for PAR/print
 	for _, stmt := range program.Statements {
@@ -131,6 +142,9 @@ func (g *Generator) Generate(program *ast.Program) string {
 		}
 		if g.containsAltReplicator(stmt) {
 			g.needReflect = true
+		}
+		if g.containsBoolConversion(stmt) {
+			g.needBoolHelper = true
 		}
 		if proc, ok := stmt.(*ast.ProcDecl); ok {
 			g.procSigs[proc.Name] = proc.Params
@@ -242,6 +256,11 @@ func (g *Generator) Generate(program *ast.Program) string {
 	// Emit transputer intrinsic helper functions
 	if g.needMathBits {
 		g.emitIntrinsicHelpers()
+	}
+
+	// Emit _boolToInt helper function
+	if g.needBoolHelper {
+		g.emitBoolHelper()
 	}
 
 	// Generate type definitions first (at package level)
@@ -1051,6 +1070,12 @@ func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 	for _, n := range goNames {
 		g.writeLine(fmt.Sprintf("_ = %s", n))
 	}
+	// Track BOOL variables for type conversion codegen
+	if decl.Type == "BOOL" {
+		for _, n := range decl.Names {
+			g.boolVars[n] = true
+		}
+	}
 }
 
 func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
@@ -1339,6 +1364,52 @@ func (g *Generator) collectChanProtocols(stmt ast.Statement) {
 		for _, c := range s.Cases {
 			for _, inner := range c.Body {
 				g.collectChanProtocols(inner)
+			}
+		}
+	}
+}
+
+func (g *Generator) collectBoolVars(stmt ast.Statement) {
+	switch s := stmt.(type) {
+	case *ast.VarDecl:
+		if s.Type == "BOOL" {
+			for _, name := range s.Names {
+				g.boolVars[name] = true
+			}
+		}
+	case *ast.SeqBlock:
+		for _, inner := range s.Statements {
+			g.collectBoolVars(inner)
+		}
+	case *ast.ParBlock:
+		for _, inner := range s.Statements {
+			g.collectBoolVars(inner)
+		}
+	case *ast.ProcDecl:
+		for _, inner := range s.Body {
+			g.collectBoolVars(inner)
+		}
+	case *ast.FuncDecl:
+		for _, inner := range s.Body {
+			g.collectBoolVars(inner)
+		}
+	case *ast.WhileLoop:
+		for _, inner := range s.Body {
+			g.collectBoolVars(inner)
+		}
+	case *ast.IfStatement:
+		for _, choice := range s.Choices {
+			if choice.NestedIf != nil {
+				g.collectBoolVars(choice.NestedIf)
+			}
+			for _, inner := range choice.Body {
+				g.collectBoolVars(inner)
+			}
+		}
+	case *ast.CaseStatement:
+		for _, choice := range s.Choices {
+			for _, inner := range choice.Body {
+				g.collectBoolVars(inner)
 			}
 		}
 	}
@@ -2406,10 +2477,30 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 	case *ast.FuncCall:
 		g.generateFuncCallExpr(e)
 	case *ast.TypeConversion:
-		g.write(g.occamTypeToGo(e.TargetType))
-		g.write("(")
-		g.generateExpression(e.Expr)
-		g.write(")")
+		if e.TargetType == "BOOL" {
+			// numeric → bool: emit ((expr) != 0)
+			g.write("((")
+			g.generateExpression(e.Expr)
+			g.write(") != 0)")
+		} else if g.isBoolExpression(e.Expr) {
+			// bool → numeric: emit type(_boolToInt(expr))
+			goType := g.occamTypeToGo(e.TargetType)
+			if goType == "int" {
+				g.write("_boolToInt(")
+				g.generateExpression(e.Expr)
+				g.write(")")
+			} else {
+				g.write(goType)
+				g.write("(_boolToInt(")
+				g.generateExpression(e.Expr)
+				g.write("))")
+			}
+		} else {
+			g.write(g.occamTypeToGo(e.TargetType))
+			g.write("(")
+			g.generateExpression(e.Expr)
+			g.write(")")
+		}
 	case *ast.MostExpr:
 		g.generateMostExpr(e)
 	case *ast.ArrayLiteral:
@@ -2521,6 +2612,55 @@ func (g *Generator) containsIntrinsics(stmt ast.Statement) bool {
 		}
 		return false
 	})
+}
+
+// containsBoolConversion checks if a statement tree contains a bool-to-numeric type conversion.
+func (g *Generator) containsBoolConversion(stmt ast.Statement) bool {
+	return g.walkStatements(stmt, func(e ast.Expression) bool {
+		tc, ok := e.(*ast.TypeConversion)
+		if !ok {
+			return false
+		}
+		// Only need the helper for bool→numeric (not numeric→bool)
+		return tc.TargetType != "BOOL" && g.isBoolExpression(tc.Expr)
+	})
+}
+
+// isBoolExpression returns true if the expression is known to produce a bool value.
+func (g *Generator) isBoolExpression(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.BooleanLiteral:
+		return true
+	case *ast.Identifier:
+		return g.boolVars[e.Value]
+	case *ast.UnaryExpr:
+		return e.Operator == "NOT"
+	case *ast.BinaryExpr:
+		switch e.Operator {
+		case "=", "<>", "<", ">", "<=", ">=", "AND", "OR", "AFTER":
+			return true
+		}
+	case *ast.TypeConversion:
+		return e.TargetType == "BOOL"
+	case *ast.ParenExpr:
+		return g.isBoolExpression(e.Expr)
+	}
+	return false
+}
+
+// emitBoolHelper writes the _boolToInt helper function.
+func (g *Generator) emitBoolHelper() {
+	g.writeLine("func _boolToInt(b bool) int {")
+	g.indent++
+	g.writeLine("if b {")
+	g.indent++
+	g.writeLine("return 1")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("return 0")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
 }
 
 // containsRetypes checks if a statement tree contains RETYPES declarations.
