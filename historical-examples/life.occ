@@ -4,6 +4,35 @@
 --
 --  The program in this chapter plays Life on a terminal screen.
 --
+--  Adapted for occam2go: replaced book-library functions
+--  (write.string, write.formatted, DATA.ITEM) with inline
+--  definitions; added terminal.keyboard/terminal.screen declarations.
+--
+
+--
+--  helper procedures (replaces book standard library)
+--
+
+PROC write.string(CHAN OF BYTE out, VAL []BYTE s)
+  SEQ i = 0 FOR SIZE s
+    out ! s[i]
+:
+
+PROC write.small.int(CHAN OF BYTE out, VAL INT n)
+  -- outputs a small non-negative integer (0..999) as decimal digits
+  IF
+    n >= 100
+      SEQ
+        out ! BYTE ((n / 100) + (INT '0'))
+        out ! BYTE (((n / 10) \ 10) + (INT '0'))
+        out ! BYTE ((n \ 10) + (INT '0'))
+    n >= 10
+      SEQ
+        out ! BYTE ((n / 10) + (INT '0'))
+        out ! BYTE ((n \ 10) + (INT '0'))
+    TRUE
+      out ! BYTE (n + (INT '0'))
+:
 
 --
 --  configuration constants
@@ -121,18 +150,24 @@ PROC cell([][][]CHAN OF STATE link,
 --
 
 PROC clear.screen(CHAN OF BYTE terminal)
-  -- clear screen sequence for an ANSI terminal
-  write.string(terminal, "*#1B[2J")
+  -- clear screen sequence for an ANSI terminal: ESC [ 2 J
+  SEQ
+    terminal ! BYTE #1B
+    terminal ! '['
+    terminal ! '2'
+    terminal ! 'J'
 :
 
 PROC move.cursor(CHAN OF BYTE terminal, VAL INT x, y)
   -- left-handed co-ordinates, origin 0,0 at top left
-  CHAN OF DATA.ITEM c :
-  PAR
-    write.formatted(terminal, "*#1B[%d;%dH", c)
-    SEQ
-      c ! data.int; y + 1
-      c ! data.int; x + 1
+  -- outputs ANSI escape sequence: ESC [ row ; col H
+  SEQ
+    terminal ! BYTE #1B
+    terminal ! '['
+    write.small.int(terminal, y + 1)
+    terminal ! ';'
+    write.small.int(terminal, x + 1)
+    terminal ! 'H'
 :
 
 
@@ -397,6 +432,8 @@ PROC controller(CHAN OF BYTE keyboard, screen,
 --  structure of the program
 --
 
+CHAN OF BYTE terminal.keyboard :
+CHAN OF BYTE terminal.screen :
 [array.width][array.height][neighbours]CHAN OF STATE link :
 [array.width][array.height]CHAN OF COMMAND control :
 [array.width][array.height]CHAN OF RESPONSE sense :

@@ -35,6 +35,9 @@ type Generator struct {
 	recordDefs map[string]*ast.RecordDecl
 	recordVars map[string]string // variable name → record type name
 
+	// Channel element type tracking (for ALT guard codegen)
+	chanElemTypes map[string]string // channel name → Go element type
+
 	// Bool variable tracking (for type conversion codegen)
 	boolVars map[string]bool
 
@@ -106,6 +109,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
 	g.chanProtocols = make(map[string]string)
+	g.chanElemTypes = make(map[string]string)
 	g.tmpCounter = 0
 	g.recordDefs = make(map[string]*ast.RecordDecl)
 	g.recordVars = make(map[string]string)
@@ -279,7 +283,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 			g.write("\n")
 		} else {
 			goType := g.occamTypeToGo(abbr.Type)
-			if abbr.IsOpenArray {
+			if abbr.IsOpenArray || abbr.IsFixedArray {
 				goType = "[]" + goType
 			}
 			g.builder.WriteString("var ")
@@ -1108,7 +1112,7 @@ func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	if abbr.Type != "" {
 		goType := g.occamTypeToGo(abbr.Type)
-		if abbr.IsOpenArray {
+		if abbr.IsOpenArray || abbr.IsFixedArray {
 			goType = "[]" + goType
 		}
 		g.write(fmt.Sprintf("var %s %s = ", goIdent(abbr.Name), goType))
@@ -1132,6 +1136,9 @@ func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 
 func (g *Generator) generateChanDecl(decl *ast.ChanDecl) {
 	goType := g.occamTypeToGo(decl.ElemType)
+	for _, name := range decl.Names {
+		g.chanElemTypes[name] = goType
+	}
 	if len(decl.Sizes) > 0 {
 		for _, name := range decl.Names {
 			n := goIdent(name)
@@ -1884,11 +1891,12 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 		for i, c := range alt.Cases {
 			if c.Guard != nil && !c.IsSkip {
 				g.builder.WriteString(strings.Repeat("\t", g.indent))
-				g.write(fmt.Sprintf("var _alt%d chan ", i))
-				// We don't know the channel type here, so use interface{}
-				// Actually, we should use the same type as the original channel
-				// For now, let's just reference the original channel conditionally
-				g.write(fmt.Sprintf("int = nil\n")) // Assuming int for now
+				// Look up the channel's element type
+				elemType := "int" // default fallback
+				if t, ok := g.chanElemTypes[c.Channel]; ok {
+					elemType = t
+				}
+				g.write(fmt.Sprintf("var _alt%d chan %s = nil\n", i, elemType))
 				g.builder.WriteString(strings.Repeat("\t", g.indent))
 				g.write(fmt.Sprintf("if "))
 				g.generateExpression(c.Guard)
@@ -2100,11 +2108,12 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 		} else {
 			delete(newBoolVars, p.Name)
 		}
-		// Register chan params with protocol mappings
+		// Register chan params with protocol mappings and element types
 		if p.IsChan || p.ChanArrayDims > 0 {
 			if _, ok := g.protocolDefs[p.ChanElemType]; ok {
 				g.chanProtocols[p.Name] = p.ChanElemType
 			}
+			g.chanElemTypes[p.Name] = g.occamTypeToGo(p.ChanElemType)
 		}
 		// Register record-typed params
 		if !p.IsChan {

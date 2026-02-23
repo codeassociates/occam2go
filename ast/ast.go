@@ -491,13 +491,14 @@ func (se *SliceExpr) TokenLiteral() string { return se.Token.Literal }
 
 // Abbreviation represents an abbreviation: VAL INT x IS 42:, INT y IS z:, or INITIAL INT x IS 42:
 type Abbreviation struct {
-	Token       lexer.Token // VAL, INITIAL, or type token
-	IsVal       bool        // true for VAL abbreviations
-	IsInitial   bool        // true for INITIAL declarations
-	IsOpenArray bool        // true for []TYPE abbreviations (e.g. VAL []BYTE)
-	Type        string      // "INT", "BYTE", "BOOL", etc.
-	Name        string      // variable name
-	Value       Expression  // the expression
+	Token        lexer.Token // VAL, INITIAL, or type token
+	IsVal        bool        // true for VAL abbreviations
+	IsInitial    bool        // true for INITIAL declarations
+	IsOpenArray  bool        // true for []TYPE abbreviations (e.g. VAL []BYTE)
+	IsFixedArray bool        // true for [n]TYPE abbreviations (e.g. VAL [8]INT)
+	Type         string      // "INT", "BYTE", "BOOL", etc.
+	Name         string      // variable name
+	Value        Expression  // the expression
 }
 
 func (a *Abbreviation) statementNode()       {}
