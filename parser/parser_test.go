@@ -381,6 +381,72 @@ func TestAltBlockWithGuardedSkip(t *testing.T) {
 	}
 }
 
+func TestPriAltBlock(t *testing.T) {
+	input := `PRI ALT
+  c1 ? x
+    SKIP
+  c2 ? y
+    SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	alt, ok := program.Statements[0].(*ast.AltBlock)
+	if !ok {
+		t.Fatalf("expected AltBlock, got %T", program.Statements[0])
+	}
+
+	if !alt.Priority {
+		t.Error("expected Priority to be true for PRI ALT")
+	}
+
+	if len(alt.Cases) != 2 {
+		t.Fatalf("expected 2 cases, got %d", len(alt.Cases))
+	}
+
+	if alt.Cases[0].Channel != "c1" {
+		t.Errorf("expected channel 'c1', got %s", alt.Cases[0].Channel)
+	}
+
+	if alt.Cases[1].Channel != "c2" {
+		t.Errorf("expected channel 'c2', got %s", alt.Cases[1].Channel)
+	}
+}
+
+func TestPriParBlock(t *testing.T) {
+	input := `PRI PAR
+  x := 1
+  y := 2
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	par, ok := program.Statements[0].(*ast.ParBlock)
+	if !ok {
+		t.Fatalf("expected ParBlock, got %T", program.Statements[0])
+	}
+
+	if !par.Priority {
+		t.Error("expected Priority to be true for PRI PAR")
+	}
+
+	if len(par.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(par.Statements))
+	}
+}
+
 func TestWhileLoop(t *testing.T) {
 	input := `WHILE x > 0
   x := x - 1

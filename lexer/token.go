@@ -100,6 +100,7 @@ const (
 	TIMES    // TIMES (modular multiplication keyword)
 	ROUND_KW // ROUND (type conversion qualifier)
 	TRUNC_KW // TRUNC (type conversion qualifier)
+	PRI      // PRI (priority modifier for ALT/PAR)
 	keyword_end
 )
 
@@ -195,6 +196,7 @@ var tokenNames = map[TokenType]string{
 	TIMES:      "TIMES",
 	ROUND_KW:   "ROUND",
 	TRUNC_KW:   "TRUNC",
+	PRI:        "PRI",
 }
 
 var keywords = map[string]TokenType{
@@ -248,6 +250,7 @@ var keywords = map[string]TokenType{
 	"TIMES":    TIMES,
 	"ROUND":    ROUND_KW,
 	"TRUNC":    TRUNC_KW,
+	"PRI":      PRI,
 }
 
 func (t TokenType) String() string {

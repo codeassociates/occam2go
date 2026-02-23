@@ -353,3 +353,42 @@ func TestE2E_ReplicatedAltByte(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_PriAlt(t *testing.T) {
+	// Test PRI ALT: behaves the same as ALT in Go (no priority semantics)
+	occam := `SEQ
+  CHAN OF INT c1:
+  CHAN OF INT c2:
+  INT result:
+  PAR
+    c1 ! 42
+    PRI ALT
+      c1 ? result
+        print.int(result)
+      c2 ? result
+        print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_PriPar(t *testing.T) {
+	// Test PRI PAR: behaves the same as PAR in Go (no priority semantics)
+	occam := `SEQ
+  CHAN OF INT c:
+  INT result:
+  PRI PAR
+    c ! 99
+    SEQ
+      c ? result
+      print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
