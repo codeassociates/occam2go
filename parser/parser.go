@@ -791,6 +791,16 @@ func (p *Parser) parseIndexedOperation() ast.Statement {
 		}
 		stmt.Variable = p.curToken.Literal
 
+		// Collect variable indices: cs[i] ? flags[0] or cs[i] ? grid[j][k]
+		for p.peekTokenIs(lexer.LBRACKET) {
+			p.nextToken() // move to [
+			p.nextToken() // move past [
+			stmt.VariableIndices = append(stmt.VariableIndices, p.parseExpression(LOWEST))
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+		}
+
 		// Check for sequential receive
 		for p.peekTokenIs(lexer.SEMICOLON) {
 			p.nextToken() // move to ;
@@ -1293,6 +1303,16 @@ func (p *Parser) parseReceive() ast.Statement {
 	}
 	stmt.Variable = p.curToken.Literal
 
+	// Collect variable indices: c ? flags[0] or c ? grid[i][j]
+	for p.peekTokenIs(lexer.LBRACKET) {
+		p.nextToken() // move to [
+		p.nextToken() // move past [
+		stmt.VariableIndices = append(stmt.VariableIndices, p.parseExpression(LOWEST))
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+	}
+
 	// Check for sequential receive: c ? x ; y ; z
 	for p.peekTokenIs(lexer.SEMICOLON) {
 		p.nextToken() // move to ;
@@ -1756,13 +1776,22 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			p.nextToken() // move past AFTER
 			altCase.Deadline = p.parseExpression(LOWEST)
 		} else {
-			// Simple case: channel ? var
+			// Simple case: channel ? var or channel ? var[i]
 			altCase.Channel = name
 			p.nextToken() // move to ?
 			if !p.expectPeek(lexer.IDENT) {
 				return nil
 			}
 			altCase.Variable = p.curToken.Literal
+			// Collect variable indices: ch ? flags[0]
+			for p.peekTokenIs(lexer.LBRACKET) {
+				p.nextToken() // move to [
+				p.nextToken() // move past [
+				altCase.VariableIndices = append(altCase.VariableIndices, p.parseExpression(LOWEST))
+				if !p.expectPeek(lexer.RBRACKET) {
+					return nil
+				}
+			}
 		}
 	} else if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.LBRACKET) {
 		// Indexed channel case: cs[i] ? var or cs[i][j] ? var
@@ -1783,6 +1812,15 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			return nil
 		}
 		altCase.Variable = p.curToken.Literal
+		// Collect variable indices: cs[i] ? flags[0]
+		for p.peekTokenIs(lexer.LBRACKET) {
+			p.nextToken() // move to [
+			p.nextToken() // move past [
+			altCase.VariableIndices = append(altCase.VariableIndices, p.parseExpression(LOWEST))
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+		}
 	} else {
 		// Guard followed by & channel ? var, or guard & SKIP
 		guard := p.parseExpression(LOWEST)
@@ -1823,6 +1861,15 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 				return nil
 			}
 			altCase.Variable = p.curToken.Literal
+			// Collect variable indices: guard & ch ? flags[0]
+			for p.peekTokenIs(lexer.LBRACKET) {
+				p.nextToken() // move to [
+				p.nextToken() // move past [
+				altCase.VariableIndices = append(altCase.VariableIndices, p.parseExpression(LOWEST))
+				if !p.expectPeek(lexer.RBRACKET) {
+					return nil
+				}
+			}
 		}
 	}
 

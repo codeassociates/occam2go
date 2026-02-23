@@ -373,10 +373,11 @@ func (s *Send) TokenLiteral() string { return s.Token.Literal }
 // Receive represents a channel receive: c ? x or c ? x ; y
 type Receive struct {
 	Token          lexer.Token  // the ? token
-	Channel        string       // channel name
-	ChannelIndices []Expression // non-empty for cs[i] ? x or cs[i][j] ? x
-	Variable       string       // variable to receive into (simple receive)
-	Variables      []string     // additional variables for sequential receives (c ? x ; y)
+	Channel         string       // channel name
+	ChannelIndices  []Expression // non-empty for cs[i] ? x or cs[i][j] ? x
+	Variable        string       // variable to receive into (simple receive)
+	VariableIndices []Expression // non-empty for c ? flags[0] or c ? grid[i][j]
+	Variables       []string     // additional variables for sequential receives (c ? x ; y)
 }
 
 func (r *Receive) statementNode()       {}
@@ -396,11 +397,12 @@ func (a *AltBlock) TokenLiteral() string { return a.Token.Literal }
 
 // AltCase represents a single case in an ALT block
 type AltCase struct {
-	Guard          Expression   // optional guard condition (nil if no guard)
-	Channel        string       // channel name
-	ChannelIndices []Expression // non-empty for cs[i] ? x or cs[i][j] ? x in ALT
-	Variable       string       // variable to receive into
-	Body           []Statement  // the body to execute
+	Guard           Expression   // optional guard condition (nil if no guard)
+	Channel         string       // channel name
+	ChannelIndices  []Expression // non-empty for cs[i] ? x or cs[i][j] ? x in ALT
+	Variable        string       // variable to receive into
+	VariableIndices []Expression // non-empty for c ? flags[0] or c ? grid[i][j]
+	Body            []Statement  // the body to execute
 	IsTimer        bool         // true if this is a timer AFTER case
 	IsSkip         bool         // true if this is a guarded SKIP case (guard & SKIP)
 	Timer          string       // timer name (when IsTimer)

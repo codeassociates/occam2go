@@ -3888,3 +3888,93 @@ PROC test(CHAN OF CMD ch)
 		t.Errorf("expected SeqBlock as second body statement, got %T", evolveCase.Body[1])
 	}
 }
+
+func TestReceiveIndexedVariable(t *testing.T) {
+	input := `ch ? flags[0]
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "ch" {
+		t.Errorf("expected channel 'ch', got %s", recv.Channel)
+	}
+
+	if recv.Variable != "flags" {
+		t.Errorf("expected variable 'flags', got %s", recv.Variable)
+	}
+
+	if len(recv.VariableIndices) != 1 {
+		t.Fatalf("expected 1 variable index, got %d", len(recv.VariableIndices))
+	}
+}
+
+func TestReceiveMultiIndexedVariable(t *testing.T) {
+	input := `ch ? grid[i][j]
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Variable != "grid" {
+		t.Errorf("expected variable 'grid', got %s", recv.Variable)
+	}
+
+	if len(recv.VariableIndices) != 2 {
+		t.Fatalf("expected 2 variable indices, got %d", len(recv.VariableIndices))
+	}
+}
+
+func TestIndexedChannelReceiveIndexedVariable(t *testing.T) {
+	input := `cs[0] ? flags[1]
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	recv, ok := program.Statements[0].(*ast.Receive)
+	if !ok {
+		t.Fatalf("expected Receive, got %T", program.Statements[0])
+	}
+
+	if recv.Channel != "cs" {
+		t.Errorf("expected channel 'cs', got %s", recv.Channel)
+	}
+
+	if len(recv.ChannelIndices) != 1 {
+		t.Fatalf("expected 1 channel index, got %d", len(recv.ChannelIndices))
+	}
+
+	if recv.Variable != "flags" {
+		t.Errorf("expected variable 'flags', got %s", recv.Variable)
+	}
+
+	if len(recv.VariableIndices) != 1 {
+		t.Fatalf("expected 1 variable index, got %d", len(recv.VariableIndices))
+	}
+}

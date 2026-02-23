@@ -1346,7 +1346,9 @@ func (g *Generator) generateReceive(recv *ast.Receive) {
 		g.tmpCounter++
 		g.writeLine(fmt.Sprintf("%s := <-%s", tmpName, chanRef))
 		varRef := goIdent(recv.Variable)
-		if g.refParams[recv.Variable] {
+		if len(recv.VariableIndices) > 0 {
+			varRef += g.generateIndicesStr(recv.VariableIndices)
+		} else if g.refParams[recv.Variable] {
 			varRef = "*" + varRef
 		}
 		g.writeLine(fmt.Sprintf("%s = %s._0", varRef, tmpName))
@@ -1359,7 +1361,9 @@ func (g *Generator) generateReceive(recv *ast.Receive) {
 		}
 	} else {
 		varRef := goIdent(recv.Variable)
-		if g.refParams[recv.Variable] {
+		if len(recv.VariableIndices) > 0 {
+			varRef += g.generateIndicesStr(recv.VariableIndices)
+		} else if g.refParams[recv.Variable] {
 			varRef = "*" + varRef
 		}
 		g.writeLine(fmt.Sprintf("%s = <-%s", varRef, chanRef))
@@ -1903,13 +1907,25 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 			g.generateExpression(c.Deadline)
 			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
 		} else if c.Guard != nil {
-			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", goIdent(c.Variable), i))
+			varRef := goIdent(c.Variable)
+			if len(c.VariableIndices) > 0 {
+				varRef += g.generateIndicesStr(c.VariableIndices)
+			}
+			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", varRef, i))
 		} else if len(c.ChannelIndices) > 0 {
-			g.write(fmt.Sprintf("case %s = <-%s", goIdent(c.Variable), goIdent(c.Channel)))
+			varRef := goIdent(c.Variable)
+			if len(c.VariableIndices) > 0 {
+				varRef += g.generateIndicesStr(c.VariableIndices)
+			}
+			g.write(fmt.Sprintf("case %s = <-%s", varRef, goIdent(c.Channel)))
 			g.generateIndices(c.ChannelIndices)
 			g.write(":\n")
 		} else {
-			g.write(fmt.Sprintf("case %s = <-%s:\n", goIdent(c.Variable), goIdent(c.Channel)))
+			varRef := goIdent(c.Variable)
+			if len(c.VariableIndices) > 0 {
+				varRef += g.generateIndicesStr(c.VariableIndices)
+			}
+			g.write(fmt.Sprintf("case %s = <-%s:\n", varRef, goIdent(c.Channel)))
 		}
 		g.indent++
 		guardedSkip := c.IsSkip && c.Guard != nil
@@ -2040,7 +2056,11 @@ func (g *Generator) generateReplicatedAlt(alt *ast.AltBlock) {
 	}
 
 	// Assign received value from reflect.Value
-	g.writeLine(fmt.Sprintf("%s = _altValue.Interface().(%s)", goIdent(c.Variable), recvType))
+	varRef := goIdent(c.Variable)
+	if len(c.VariableIndices) > 0 {
+		varRef += g.generateIndicesStr(c.VariableIndices)
+	}
+	g.writeLine(fmt.Sprintf("%s = _altValue.Interface().(%s)", varRef, recvType))
 
 	// Generate body
 	for _, s := range c.Body {
