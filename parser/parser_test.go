@@ -1330,6 +1330,49 @@ func TestTypeConversion(t *testing.T) {
 	}
 }
 
+func TestTypeConversionWithQualifier(t *testing.T) {
+	tests := []struct {
+		input     string
+		target    string
+		qualifier string
+	}{
+		{"x := INT ROUND y\n", "INT", "ROUND"},
+		{"x := INT TRUNC y\n", "INT", "TRUNC"},
+		{"x := INT64 ROUND y\n", "INT64", "ROUND"},
+		{"x := REAL32 TRUNC y\n", "REAL32", "TRUNC"},
+		{"x := INT y\n", "INT", ""},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("input %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("input %q: expected Assignment, got %T", tt.input, program.Statements[0])
+		}
+
+		tc, ok := assign.Value.(*ast.TypeConversion)
+		if !ok {
+			t.Fatalf("input %q: expected TypeConversion, got %T", tt.input, assign.Value)
+		}
+
+		if tc.TargetType != tt.target {
+			t.Errorf("input %q: expected TargetType %s, got %s", tt.input, tt.target, tc.TargetType)
+		}
+
+		if tc.Qualifier != tt.qualifier {
+			t.Errorf("input %q: expected Qualifier %q, got %q", tt.input, tt.qualifier, tc.Qualifier)
+		}
+	}
+}
+
 func TestTypeConversionInExpression(t *testing.T) {
 	input := `x := INT y + 1
 `

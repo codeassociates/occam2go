@@ -2812,9 +2812,15 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		lexer.INT16_TYPE, lexer.INT32_TYPE, lexer.INT64_TYPE:
 		token := p.curToken
 		p.nextToken()
+		qualifier := ""
+		if p.curTokenIs(lexer.ROUND_KW) || p.curTokenIs(lexer.TRUNC_KW) {
+			qualifier = p.curToken.Literal
+			p.nextToken()
+		}
 		left = &ast.TypeConversion{
 			Token:      token,
 			TargetType: token.Literal,
+			Qualifier:  qualifier,
 			Expr:       p.parseExpression(PREFIX),
 		}
 	default:

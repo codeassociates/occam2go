@@ -919,6 +919,9 @@ func (g *Generator) exprNeedsMath(expr ast.Expression) bool {
 	case *ast.ParenExpr:
 		return g.exprNeedsMath(e.Expr)
 	case *ast.TypeConversion:
+		if e.Qualifier == "ROUND" && isOccamIntType(e.TargetType) {
+			return true
+		}
 		return g.exprNeedsMath(e.Expr)
 	case *ast.SizeExpr:
 		return g.exprNeedsMath(e.Expr)
@@ -1544,6 +1547,14 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 		}
 		return occamType // pass through unknown types
 	}
+}
+
+func isOccamIntType(t string) bool {
+	switch t {
+	case "INT", "INT16", "INT32", "INT64", "BYTE":
+		return true
+	}
+	return false
 }
 
 func (g *Generator) generateAssignment(assign *ast.Assignment) {
@@ -2495,6 +2506,13 @@ func (g *Generator) generateExpression(expr ast.Expression) {
 				g.generateExpression(e.Expr)
 				g.write("))")
 			}
+		} else if e.Qualifier == "ROUND" && isOccamIntType(e.TargetType) {
+			// float → int with ROUND: emit goType(math.Round(float64(expr)))
+			goType := g.occamTypeToGo(e.TargetType)
+			g.write(goType)
+			g.write("(math.Round(float64(")
+			g.generateExpression(e.Expr)
+			g.write(")))")
 		} else {
 			g.write(g.occamTypeToGo(e.TargetType))
 			g.write("(")
