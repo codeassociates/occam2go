@@ -43,34 +43,34 @@ type VarDecl struct {
 func (v *VarDecl) statementNode()       {}
 func (v *VarDecl) TokenLiteral() string { return v.Token.Literal }
 
-// ArrayDecl represents an array declaration: [5]INT arr:
+// ArrayDecl represents an array declaration: [5]INT arr: or [5][3]INT arr:
 type ArrayDecl struct {
-	Token lexer.Token // the [ token
-	Size  Expression  // array size
-	Type  string      // element type ("INT", "BYTE", "BOOL", etc.)
-	Names []string    // variable names
+	Token lexer.Token  // the [ token
+	Sizes []Expression // array sizes (one per dimension)
+	Type  string       // element type ("INT", "BYTE", "BOOL", etc.)
+	Names []string     // variable names
 }
 
 func (a *ArrayDecl) statementNode()       {}
 func (a *ArrayDecl) TokenLiteral() string { return a.Token.Literal }
 
-// Assignment represents an assignment: x := 5 or arr[i] := 5 or [arr FROM n FOR m] := value
+// Assignment represents an assignment: x := 5 or arr[i] := 5 or arr[i][j] := 5 or [arr FROM n FOR m] := value
 type Assignment struct {
-	Token       lexer.Token // the := token
-	Name        string      // variable name
-	Index       Expression  // optional: index expression for arr[i] := x (nil for simple assignments)
-	SliceTarget *SliceExpr  // optional: slice target for [arr FROM n FOR m] := value
-	Value       Expression  // the value being assigned
+	Token       lexer.Token  // the := token
+	Name        string       // variable name
+	Indices     []Expression // optional: index expressions for arr[i][j] := x (nil/empty for simple assignments)
+	SliceTarget *SliceExpr   // optional: slice target for [arr FROM n FOR m] := value
+	Value       Expression   // the value being assigned
 }
 
 func (a *Assignment) statementNode()       {}
 func (a *Assignment) TokenLiteral() string { return a.Token.Literal }
 
 // MultiAssignTarget represents one target in a multi-assignment.
-// Name is always set. Index is non-nil for indexed targets like arr[i].
+// Name is always set. Indices is non-empty for indexed targets like arr[i] or arr[i][j].
 type MultiAssignTarget struct {
-	Name  string     // variable name
-	Index Expression // optional: index expression for arr[i] (nil for simple ident)
+	Name    string       // variable name
+	Indices []Expression // optional: index expressions for arr[i][j] (nil/empty for simple ident)
 }
 
 // MultiAssignment represents a multi-target assignment: a, b := func(x)
@@ -146,8 +146,8 @@ type ProcParam struct {
 	Type         string // INT, BYTE, BOOL, etc.
 	Name         string
 	IsChan       bool   // true if this is a CHAN OF <type> parameter
-	IsChanArray  bool   // true for []CHAN OF TYPE params
-	IsOpenArray  bool   // true for []TYPE params (open array)
+	ChanArrayDims int   // number of [] dimensions for []CHAN, [][]CHAN, etc. (0 = not a chan array)
+	OpenArrayDims int   // number of [] dimensions for []TYPE, [][]TYPE, etc. (0 = not an open array)
 	ChanElemType string // element type when IsChan (e.g., "INT")
 	ChanDir      string // "?" for input, "!" for output, "" for bidirectional
 	ArraySize    string // non-empty for fixed-size array params like [2]INT
@@ -345,13 +345,12 @@ type IndexExpr struct {
 func (ie *IndexExpr) expressionNode()      {}
 func (ie *IndexExpr) TokenLiteral() string { return ie.Token.Literal }
 
-// ChanDecl represents a channel declaration: CHAN OF INT c: or [n]CHAN OF INT cs:
+// ChanDecl represents a channel declaration: CHAN OF INT c: or [n]CHAN OF INT cs: or [n][m]CHAN OF INT cs:
 type ChanDecl struct {
-	Token    lexer.Token // the CHAN token
-	ElemType string      // the element type (INT, BYTE, etc.)
-	Names    []string    // channel names
-	IsArray  bool        // true for [n]CHAN OF TYPE
-	Size     Expression  // array size when IsArray
+	Token    lexer.Token  // the CHAN token
+	ElemType string       // the element type (INT, BYTE, etc.)
+	Names    []string     // channel names
+	Sizes    []Expression // array sizes per dimension (empty = scalar channel)
 }
 
 func (c *ChanDecl) statementNode()       {}
@@ -359,12 +358,12 @@ func (c *ChanDecl) TokenLiteral() string { return c.Token.Literal }
 
 // Send represents a channel send: c ! x or c ! x ; y or c ! tag ; x
 type Send struct {
-	Token        lexer.Token  // the ! token
-	Channel      string       // channel name
-	ChannelIndex Expression   // non-nil for cs[i] ! value
-	Value        Expression   // value to send (simple send, backward compat)
-	Values       []Expression // additional values for sequential sends (c ! x ; y)
-	VariantTag   string       // variant tag name for variant sends (c ! tag ; x)
+	Token          lexer.Token  // the ! token
+	Channel        string       // channel name
+	ChannelIndices []Expression // non-empty for cs[i] ! value or cs[i][j] ! value
+	Value          Expression   // value to send (simple send, backward compat)
+	Values         []Expression // additional values for sequential sends (c ! x ; y)
+	VariantTag     string       // variant tag name for variant sends (c ! tag ; x)
 }
 
 func (s *Send) statementNode()       {}
@@ -372,11 +371,11 @@ func (s *Send) TokenLiteral() string { return s.Token.Literal }
 
 // Receive represents a channel receive: c ? x or c ? x ; y
 type Receive struct {
-	Token        lexer.Token // the ? token
-	Channel      string      // channel name
-	ChannelIndex Expression  // non-nil for cs[i] ? x
-	Variable     string      // variable to receive into (simple receive)
-	Variables    []string    // additional variables for sequential receives (c ? x ; y)
+	Token          lexer.Token  // the ? token
+	Channel        string       // channel name
+	ChannelIndices []Expression // non-empty for cs[i] ? x or cs[i][j] ? x
+	Variable       string       // variable to receive into (simple receive)
+	Variables      []string     // additional variables for sequential receives (c ? x ; y)
 }
 
 func (r *Receive) statementNode()       {}
@@ -395,16 +394,16 @@ func (a *AltBlock) TokenLiteral() string { return a.Token.Literal }
 
 // AltCase represents a single case in an ALT block
 type AltCase struct {
-	Guard        Expression  // optional guard condition (nil if no guard)
-	Channel      string      // channel name
-	ChannelIndex Expression  // non-nil for cs[i] ? x in ALT
-	Variable     string      // variable to receive into
-	Body         []Statement // the body to execute
-	IsTimer      bool        // true if this is a timer AFTER case
-	IsSkip       bool        // true if this is a guarded SKIP case (guard & SKIP)
-	Timer        string      // timer name (when IsTimer)
-	Deadline     Expression  // AFTER deadline expression (when IsTimer)
-	Declarations []Statement // scoped declarations before channel input (e.g., BYTE ch:)
+	Guard          Expression   // optional guard condition (nil if no guard)
+	Channel        string       // channel name
+	ChannelIndices []Expression // non-empty for cs[i] ? x or cs[i][j] ? x in ALT
+	Variable       string       // variable to receive into
+	Body           []Statement  // the body to execute
+	IsTimer        bool         // true if this is a timer AFTER case
+	IsSkip         bool         // true if this is a guarded SKIP case (guard & SKIP)
+	Timer          string       // timer name (when IsTimer)
+	Deadline       Expression   // AFTER deadline expression (when IsTimer)
+	Declarations   []Statement  // scoped declarations before channel input (e.g., BYTE ch:)
 }
 
 // TimerDecl represents a timer declaration: TIMER tim:
@@ -445,10 +444,10 @@ func (pd *ProtocolDecl) TokenLiteral() string { return pd.Token.Literal }
 
 // VariantReceive represents a variant protocol receive: c ? CASE ...
 type VariantReceive struct {
-	Token        lexer.Token // the ? token
-	Channel      string
-	ChannelIndex Expression // non-nil for cs[i] ? CASE ...
-	Cases        []VariantCase
+	Token          lexer.Token  // the ? token
+	Channel        string
+	ChannelIndices []Expression // non-empty for cs[i] ? CASE ... or cs[i][j] ? CASE ...
+	Cases          []VariantCase
 }
 
 type VariantCase struct {

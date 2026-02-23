@@ -15,9 +15,9 @@
 ### Data Types & Declarations
 - **INT, INT16, INT32, INT64, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (INT16/32/64 map to int16/32/64, REAL/REAL64 map to float64, REAL32 maps to float32)
 - **Variable declarations** — `INT x, y, z:`
-- **Arrays** — `[n]TYPE arr:` with index expressions
+- **Arrays** — `[n]TYPE arr:` with index expressions; multi-dimensional `[n][m]TYPE` with nested init loops
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`); `CHAN BYTE` shorthand (without `OF`)
-- **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive and `[]CHAN OF TYPE` proc params
+- **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive; multi-dimensional `[n][m]CHAN OF TYPE` with nested init loops; `[]CHAN`, `[][]CHAN`, etc. proc params
 - **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only); direction annotations at call sites (`out!`, `in?`) accepted and ignored
 - **Timers** — `TIMER tim:` with reads and `AFTER` expressions
 - **Abbreviations** — `VAL INT x IS 1:`, `INT y IS z:`, untyped `VAL x IS expr:` — named constants and aliases
@@ -43,7 +43,7 @@
 - **Bitwise** — `/\`, `\/`, `><`, `~`, `<<`, `>>`
 - **AFTER** — As boolean expression (maps to `>`)
 - **Parenthesized expressions**
-- **Array indexing** — `arr[i]`, `arr[expr]`
+- **Array indexing** — `arr[i]`, `arr[expr]`, multi-dimensional `grid[i][j]`
 - **String literals** — Double-quoted strings
 - **Type conversions** — `INT expr`, `INT16 expr`, `INT32 expr`, `INT64 expr`, `BYTE expr`, `BOOL expr`, `REAL32 expr`, `REAL64 expr` (including BOOL↔numeric conversions, and ROUND/TRUNC qualifiers for float↔int conversions)
 - **Checked arithmetic** — `PLUS`, `MINUS`, `TIMES` — modular (wrapping) operators

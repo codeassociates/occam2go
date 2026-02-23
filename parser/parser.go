@@ -500,10 +500,10 @@ func (p *Parser) parseMultiAssignmentFrom(firstTarget ast.MultiAssignTarget) *as
 		p.nextToken() // consume comma
 		p.nextToken() // move to next target
 		target := ast.MultiAssignTarget{Name: p.curToken.Literal}
-		if p.peekTokenIs(lexer.LBRACKET) {
+		for p.peekTokenIs(lexer.LBRACKET) {
 			p.nextToken() // move to [
 			p.nextToken() // move past [
-			target.Index = p.parseExpression(LOWEST)
+			target.Indices = append(target.Indices, p.parseExpression(LOWEST))
 			if !p.expectPeek(lexer.RBRACKET) {
 				return nil
 			}
@@ -545,13 +545,24 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 		return nil
 	}
 
-	// Check if this is a channel array: [n]CHAN OF TYPE
+	// Collect additional dimensions: [n][m]... before CHAN or TYPE
+	sizes := []ast.Expression{size}
+	for p.peekTokenIs(lexer.LBRACKET) {
+		p.nextToken() // move to [
+		p.nextToken() // move past [
+		nextSize := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+		sizes = append(sizes, nextSize)
+	}
+
+	// Check if this is a channel array: [n]CHAN OF TYPE or [n][m]CHAN OF TYPE
 	if p.peekTokenIs(lexer.CHAN) {
 		p.nextToken() // move to CHAN
 		chanDecl := &ast.ChanDecl{
-			Token:   p.curToken,
-			IsArray: true,
-			Size:    size,
+			Token: p.curToken,
+			Sizes: sizes,
 		}
 
 		// Expect OF (optional — CHAN BYTE is shorthand for CHAN OF BYTE)
@@ -594,7 +605,7 @@ func (p *Parser) parseArrayDecl() ast.Statement {
 	}
 
 	// Regular array declaration
-	decl := &ast.ArrayDecl{Token: lbracketToken, Size: size}
+	decl := &ast.ArrayDecl{Token: lbracketToken, Sizes: sizes}
 
 	// Expect type (INT, BYTE, BOOL, REAL, REAL32, REAL64)
 	p.nextToken()
@@ -685,19 +696,31 @@ func (p *Parser) parseIndexedOperation() ast.Statement {
 		return nil
 	}
 
+	// Collect additional indices: name[i][j]...
+	indices := []ast.Expression{index}
+	for p.peekTokenIs(lexer.LBRACKET) {
+		p.nextToken() // move to [
+		p.nextToken() // move past [
+		idx := p.parseExpression(LOWEST)
+		if !p.expectPeek(lexer.RBRACKET) {
+			return nil
+		}
+		indices = append(indices, idx)
+	}
+
 	// Check what follows ]
 	if p.peekTokenIs(lexer.COMMA) {
 		// Multi-assignment starting with indexed target: name[index], ... := ...
-		firstTarget := ast.MultiAssignTarget{Name: name, Index: index}
+		firstTarget := ast.MultiAssignTarget{Name: name, Indices: indices}
 		return p.parseMultiAssignmentFrom(firstTarget)
 	}
 	if p.peekTokenIs(lexer.ASSIGN) {
-		// Indexed assignment: name[index] := value
+		// Indexed assignment: name[index] := value or name[i][j] := value
 		p.nextToken() // move to :=
 		stmt := &ast.Assignment{
-			Name:  name,
-			Token: p.curToken,
-			Index: index,
+			Name:    name,
+			Token:   p.curToken,
+			Indices: indices,
 		}
 		p.nextToken() // move past :=
 		stmt.Value = p.parseExpression(LOWEST)
@@ -705,15 +728,15 @@ func (p *Parser) parseIndexedOperation() ast.Statement {
 	}
 
 	if p.peekTokenIs(lexer.SEND) {
-		// Indexed channel send: cs[i] ! value
+		// Indexed channel send: cs[i] ! value or cs[i][j] ! value
 		p.nextToken() // move to !
 		sendToken := p.curToken
 		p.nextToken() // move past !
 
 		stmt := &ast.Send{
-			Token:        sendToken,
-			Channel:      name,
-			ChannelIndex: index,
+			Token:          sendToken,
+			Channel:        name,
+			ChannelIndices: indices,
 		}
 
 		// Check if this is a variant send: first token is an identifier that is a variant tag
@@ -745,20 +768,20 @@ func (p *Parser) parseIndexedOperation() ast.Statement {
 	}
 
 	if p.peekTokenIs(lexer.RECEIVE) {
-		// Indexed channel receive: cs[i] ? x or cs[i] ? CASE ...
+		// Indexed channel receive: cs[i] ? x or cs[i][j] ? x or cs[i] ? CASE ...
 		p.nextToken() // move to ?
 		recvToken := p.curToken
 
 		// Check for variant receive: cs[i] ? CASE
 		if p.peekTokenIs(lexer.CASE) {
 			p.nextToken() // move to CASE
-			return p.parseVariantReceiveWithIndex(name, index, recvToken)
+			return p.parseVariantReceiveWithIndex(name, indices, recvToken)
 		}
 
 		stmt := &ast.Receive{
-			Token:        recvToken,
-			Channel:      name,
-			ChannelIndex: index,
+			Token:          recvToken,
+			Channel:        name,
+			ChannelIndices: indices,
 		}
 
 		if !p.expectPeek(lexer.IDENT) {
@@ -1381,11 +1404,11 @@ func (p *Parser) parseVariantReceive(channel string, token lexer.Token) *ast.Var
 	return stmt
 }
 
-func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndex ast.Expression, token lexer.Token) *ast.VariantReceive {
+func (p *Parser) parseVariantReceiveWithIndex(channel string, channelIndices []ast.Expression, token lexer.Token) *ast.VariantReceive {
 	stmt := &ast.VariantReceive{
-		Token:        token,
-		Channel:      channel,
-		ChannelIndex: channelIndex,
+		Token:          token,
+		Channel:        channel,
+		ChannelIndices: channelIndices,
 	}
 
 	// Skip to next line
@@ -1731,14 +1754,16 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			altCase.Variable = p.curToken.Literal
 		}
 	} else if p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.LBRACKET) {
-		// Indexed channel case: cs[i] ? var
+		// Indexed channel case: cs[i] ? var or cs[i][j] ? var
 		name := p.curToken.Literal
 		altCase.Channel = name
-		p.nextToken() // move to [
-		p.nextToken() // move past [
-		altCase.ChannelIndex = p.parseExpression(LOWEST)
-		if !p.expectPeek(lexer.RBRACKET) {
-			return nil
+		for p.peekTokenIs(lexer.LBRACKET) {
+			p.nextToken() // move to [
+			p.nextToken() // move past [
+			altCase.ChannelIndices = append(altCase.ChannelIndices, p.parseExpression(LOWEST))
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
 		}
 		if !p.expectPeek(lexer.RECEIVE) {
 			return nil
@@ -1770,11 +1795,11 @@ func (p *Parser) parseAltCase() *ast.AltCase {
 			// Channel operation after guard
 			altCase.Channel = p.curToken.Literal
 
-			if p.peekTokenIs(lexer.LBRACKET) {
-				// Indexed channel with guard: guard & cs[i] ? var
+			for p.peekTokenIs(lexer.LBRACKET) {
+				// Indexed channel with guard: guard & cs[i] ? var or cs[i][j] ? var
 				p.nextToken() // move to [
 				p.nextToken() // move past [
-				altCase.ChannelIndex = p.parseExpression(LOWEST)
+				altCase.ChannelIndices = append(altCase.ChannelIndices, p.parseExpression(LOWEST))
 				if !p.expectPeek(lexer.RBRACKET) {
 					return nil
 				}
@@ -2031,14 +2056,14 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			param.IsVal = prevParam.IsVal
 			param.Type = prevParam.Type
 			param.IsChan = prevParam.IsChan
-			param.IsChanArray = prevParam.IsChanArray
-			param.IsOpenArray = prevParam.IsOpenArray
+			param.ChanArrayDims = prevParam.ChanArrayDims
+			param.OpenArrayDims = prevParam.OpenArrayDims
 			param.ChanElemType = prevParam.ChanElemType
 			param.ArraySize = prevParam.ArraySize
 			param.Name = p.curToken.Literal
 
 			// Check for channel direction marker (? or !)
-			if (param.IsChan || param.IsChanArray) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
+			if (param.IsChan || param.ChanArrayDims > 0) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
 				p.nextToken()
 				param.ChanDir = p.curToken.Literal
 			}
@@ -2066,16 +2091,21 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Check for []CHAN OF <type>, []TYPE (open array), or [n]TYPE (fixed-size array)
+		// Check for []...CHAN OF <type>, []...TYPE (open array), or [n]TYPE (fixed-size array)
 		if p.curTokenIs(lexer.LBRACKET) {
 			if p.peekTokenIs(lexer.RBRACKET) {
-				// Open array: []CHAN OF TYPE or []TYPE
-				p.nextToken() // consume ]
-				p.nextToken() // move past ]
+				// Open array: [][]...CHAN OF TYPE or [][]...TYPE
+				// Count consecutive [] pairs
+				dims := 0
+				for p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
+					dims++
+					p.nextToken() // consume ]
+					p.nextToken() // move past ]
+				}
 				if p.curTokenIs(lexer.CHAN) {
-					// []CHAN OF <type> or []CHAN <type> (channel array parameter)
+					// []...CHAN OF <type> or []...CHAN <type> (channel array parameter)
 					param.IsChan = true
-					param.IsChanArray = true
+					param.ChanArrayDims = dims
 					if p.peekTokenIs(lexer.OF) {
 						p.nextToken() // consume OF
 					}
@@ -2083,20 +2113,20 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 					if isTypeToken(p.curToken.Type) || p.curTokenIs(lexer.IDENT) {
 						param.ChanElemType = p.curToken.Literal
 					} else {
-						p.addError(fmt.Sprintf("expected type after []CHAN, got %s", p.curToken.Type))
+						p.addError(fmt.Sprintf("expected type after %sCHAN, got %s", strings.Repeat("[]", dims), p.curToken.Type))
 						return params
 					}
 					p.nextToken()
 				} else if isTypeToken(p.curToken.Type) {
-					param.IsOpenArray = true
+					param.OpenArrayDims = dims
 					param.Type = p.curToken.Literal
 					p.nextToken()
 				} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
-					param.IsOpenArray = true
+					param.OpenArrayDims = dims
 					param.Type = p.curToken.Literal
 					p.nextToken()
 				} else {
-					p.addError(fmt.Sprintf("expected type after [], got %s", p.curToken.Type))
+					p.addError(fmt.Sprintf("expected type after %s, got %s", strings.Repeat("[]", dims), p.curToken.Type))
 					return params
 				}
 			} else {
@@ -2157,7 +2187,7 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 		param.Name = p.curToken.Literal
 
 		// Check for channel direction marker (? or !)
-		if (param.IsChan || param.IsChanArray) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
+		if (param.IsChan || param.ChanArrayDims > 0) && (p.peekTokenIs(lexer.RECEIVE) || p.peekTokenIs(lexer.SEND)) {
 			p.nextToken()
 			param.ChanDir = p.curToken.Literal
 		}
