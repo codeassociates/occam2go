@@ -57,7 +57,7 @@
 ### Protocols
 - **Simple** — `PROTOCOL SIG IS INT` (type alias)
 - **Sequential** — `PROTOCOL PAIR IS INT ; BYTE` (struct)
-- **Variant** — `PROTOCOL MSG CASE tag; TYPE ...` (interface + concrete types)
+- **Variant** — `PROTOCOL MSG CASE tag; TYPE ...` (interface + concrete types), including dotted tag names (`bar.data`, `bar.terminate`)
 
 ### Records
 - **RECORD** — Struct types with field access via bracket syntax (`p[x]`)

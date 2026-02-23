@@ -523,6 +523,29 @@ func TestVariantProtocolType(t *testing.T) {
 	}
 }
 
+func TestVariantProtocolDottedTags(t *testing.T) {
+	input := `PROTOCOL BAR.PROTO
+  CASE
+    bar.data; INT
+    bar.terminate
+    bar.blank; INT
+`
+	output := transpile(t, input)
+
+	if !strings.Contains(output, "type _proto_BAR_PROTO interface {") {
+		t.Errorf("expected interface declaration in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "type _proto_BAR_PROTO_bar_data struct {") {
+		t.Errorf("expected bar_data struct in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "type _proto_BAR_PROTO_bar_terminate struct{}") {
+		t.Errorf("expected bar_terminate struct in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "type _proto_BAR_PROTO_bar_blank struct {") {
+		t.Errorf("expected bar_blank struct in output, got:\n%s", output)
+	}
+}
+
 func TestRecordType(t *testing.T) {
 	input := `RECORD POINT
   INT x:
