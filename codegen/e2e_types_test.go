@@ -675,3 +675,19 @@ func TestE2E_ComparisonToInt(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_TypedByteAbbreviation(t *testing.T) {
+	occam := `PROC main()
+  SEQ
+    VAL BYTE first.col IS 1:
+    BYTE col:
+    col := first.col
+    print.int(INT col)
+:
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

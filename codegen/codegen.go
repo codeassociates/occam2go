@@ -284,7 +284,14 @@ func (g *Generator) Generate(program *ast.Program) string {
 			}
 			g.builder.WriteString("var ")
 			g.write(fmt.Sprintf("%s %s = ", goIdent(abbr.Name), goType))
-			g.generateExpression(abbr.Value)
+			// Wrap string literals with []byte() when assigned to []byte variables
+			if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.IsOpenArray && abbr.Type == "BYTE" {
+				g.write("[]byte(")
+				g.generateExpression(abbr.Value)
+				g.write(")")
+			} else {
+				g.generateExpression(abbr.Value)
+			}
 			g.write("\n")
 		}
 	}
@@ -1083,8 +1090,23 @@ func (g *Generator) generateVarDecl(decl *ast.VarDecl) {
 
 func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
-	g.write(fmt.Sprintf("%s := ", goIdent(abbr.Name)))
-	g.generateExpression(abbr.Value)
+	if abbr.Type != "" {
+		goType := g.occamTypeToGo(abbr.Type)
+		if abbr.IsOpenArray {
+			goType = "[]" + goType
+		}
+		g.write(fmt.Sprintf("var %s %s = ", goIdent(abbr.Name), goType))
+	} else {
+		g.write(fmt.Sprintf("%s := ", goIdent(abbr.Name)))
+	}
+	// Wrap string literals with []byte() when assigned to []byte variables
+	if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.IsOpenArray && abbr.Type == "BYTE" {
+		g.write("[]byte(")
+		g.generateExpression(abbr.Value)
+		g.write(")")
+	} else {
+		g.generateExpression(abbr.Value)
+	}
 	g.write("\n")
 	// Suppress "declared and not used" for abbreviations inside function bodies
 	if g.nestingLevel > 0 {
