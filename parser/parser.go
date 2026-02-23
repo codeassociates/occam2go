@@ -187,6 +187,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseParBlock()
 	case lexer.ALT:
 		return p.parseAltBlock()
+	case lexer.PRI:
+		return p.parsePriBlock()
 	case lexer.SKIP:
 		return &ast.Skip{Token: p.curToken}
 	case lexer.STOP:
@@ -1601,6 +1603,24 @@ func (p *Parser) parseReplicator() *ast.Replicator {
 	}
 
 	return rep
+}
+
+func (p *Parser) parsePriBlock() ast.Statement {
+	// curToken is PRI, expect ALT or PAR next
+	if p.peekTokenIs(lexer.ALT) {
+		p.nextToken() // consume ALT
+		block := p.parseAltBlock()
+		block.Priority = true
+		return block
+	}
+	if p.peekTokenIs(lexer.PAR) {
+		p.nextToken() // consume PAR
+		block := p.parseParBlock()
+		block.Priority = true
+		return block
+	}
+	p.addError(fmt.Sprintf("expected ALT or PAR after PRI, got %s", p.peekToken.Type))
+	return nil
 }
 
 func (p *Parser) parseAltBlock() *ast.AltBlock {

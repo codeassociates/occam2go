@@ -8,7 +8,8 @@
 - **IF** — Multi-branch conditionals, maps to if/else if chains, with replicators; supports multi-statement bodies (declarations scoped before process)
 - **WHILE** — Loops, maps to Go `for` loops; supports multi-statement bodies
 - **CASE** — Pattern matching with multiple cases and ELSE branch; supports multi-statement bodies
-- **ALT** — Channel alternation, maps to Go `select`; supports boolean guards, timer timeouts, multi-statement bodies, and replicators (`ALT i = 0 FOR n` using `reflect.Select`)
+- **ALT / PRI ALT** — Channel alternation, maps to Go `select`; supports boolean guards, timer timeouts, multi-statement bodies, and replicators (`ALT i = 0 FOR n` using `reflect.Select`). PRI ALT treated identically (Go has no priority select).
+- **PRI PAR** — Priority parallel, treated identically to PAR (Go goroutines have no priority)
 - **SKIP** — No-op process
 - **STOP** — Error + deadlock
 
@@ -94,7 +95,7 @@
 
 | Feature | Notes |
 |---------|-------|
-| **PRI ALT / PRI PAR** | Priority variants of ALT and PAR. |
+| ~~**PRI ALT / PRI PAR**~~ | ~~Priority variants of ALT and PAR.~~ **Implemented** — treated as ALT/PAR (Go has no priority select). |
 | **PLACED PAR** | Assigning processes to specific hardware. |
 | **PORT OF** | Hardware port mapping. |
 | **`VAL []BYTE` abbreviations** | `VAL []BYTE cmap IS "0123456789ABCDEF":` — named string constants. |

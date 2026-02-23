@@ -100,6 +100,7 @@ type ParBlock struct {
 	Token      lexer.Token // the PAR token
 	Statements []Statement
 	Replicator *Replicator // optional replicator
+	Priority   bool        // true for PRI PAR
 }
 
 func (p *ParBlock) statementNode()       {}
@@ -387,6 +388,7 @@ type AltBlock struct {
 	Token      lexer.Token // the ALT token
 	Cases      []AltCase
 	Replicator *Replicator // optional replicator
+	Priority   bool        // true for PRI ALT
 }
 
 func (a *AltBlock) statementNode()       {}
