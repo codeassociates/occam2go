@@ -93,6 +93,45 @@ SEQ
 	}
 }
 
+func TestE2E_VariantProtocolDottedTags(t *testing.T) {
+	// Variant protocol with dotted tag names (e.g., bar.data)
+	occam := `PROTOCOL BAR.PROTO
+  CASE
+    bar.data; INT
+    bar.terminate
+    bar.blank; INT
+
+SEQ
+  CHAN OF BAR.PROTO c:
+  INT result:
+  result := 0
+  PAR
+    SEQ
+      c ! bar.data ; 42
+      c ! bar.terminate
+    SEQ
+      c ? CASE
+        bar.data ; result
+          print.int(result)
+        bar.terminate
+          print.int(0)
+        bar.blank ; result
+          print.int(result)
+      c ? CASE
+        bar.data ; result
+          print.int(result)
+        bar.terminate
+          print.int(99)
+        bar.blank ; result
+          print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n99\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ProtocolWithProc(t *testing.T) {
 	// Protocol channel passed as PROC parameter
 	occam := `PROTOCOL PAIR IS INT ; INT

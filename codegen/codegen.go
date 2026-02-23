@@ -1561,7 +1561,7 @@ func (g *Generator) occamTypeToGo(occamType string) string {
 	default:
 		// Check if it's a protocol name
 		if _, ok := g.protocolDefs[occamType]; ok {
-			return "_proto_" + occamType
+			return "_proto_" + goIdent(occamType)
 		}
 		// Check if it's a record type name
 		if _, ok := g.recordDefs[occamType]; ok {

@@ -1684,6 +1684,64 @@ func TestVariantProtocolDecl(t *testing.T) {
 	}
 }
 
+func TestVariantProtocolDeclDottedTags(t *testing.T) {
+	input := `PROTOCOL BAR.PROTO
+  CASE
+    bar.data; INT
+    bar.terminate
+    bar.blank; INT
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proto, ok := program.Statements[0].(*ast.ProtocolDecl)
+	if !ok {
+		t.Fatalf("expected ProtocolDecl, got %T", program.Statements[0])
+	}
+
+	if proto.Name != "BAR.PROTO" {
+		t.Errorf("expected name 'BAR.PROTO', got %s", proto.Name)
+	}
+
+	if proto.Kind != "variant" {
+		t.Errorf("expected kind 'variant', got %s", proto.Kind)
+	}
+
+	if len(proto.Variants) != 3 {
+		t.Fatalf("expected 3 variants, got %d", len(proto.Variants))
+	}
+
+	// bar.data; INT
+	if proto.Variants[0].Tag != "bar.data" {
+		t.Errorf("expected tag 'bar.data', got %s", proto.Variants[0].Tag)
+	}
+	if len(proto.Variants[0].Types) != 1 || proto.Variants[0].Types[0] != "INT" {
+		t.Errorf("expected types [INT] for bar.data, got %v", proto.Variants[0].Types)
+	}
+
+	// bar.terminate (no payload)
+	if proto.Variants[1].Tag != "bar.terminate" {
+		t.Errorf("expected tag 'bar.terminate', got %s", proto.Variants[1].Tag)
+	}
+	if len(proto.Variants[1].Types) != 0 {
+		t.Errorf("expected 0 types for bar.terminate, got %d", len(proto.Variants[1].Types))
+	}
+
+	// bar.blank; INT
+	if proto.Variants[2].Tag != "bar.blank" {
+		t.Errorf("expected tag 'bar.blank', got %s", proto.Variants[2].Tag)
+	}
+	if len(proto.Variants[2].Types) != 1 || proto.Variants[2].Types[0] != "INT" {
+		t.Errorf("expected types [INT] for bar.blank, got %v", proto.Variants[2].Types)
+	}
+}
+
 func TestChanDeclWithProtocol(t *testing.T) {
 	input := `PROTOCOL SIGNAL IS INT
 CHAN OF SIGNAL c:
