@@ -852,3 +852,29 @@ func TestMultiDimProcParamCodegen(t *testing.T) {
 		t.Errorf("expected 'func fill(grid [][]chan int)' in output, got:\n%s", output)
 	}
 }
+
+func TestEntryHarnessRawTerminal(t *testing.T) {
+	input := `PROC echo(CHAN OF BYTE keyboard?, screen!, error!)
+  BYTE ch:
+  SEQ
+    keyboard ? ch
+    screen ! ch
+:
+`
+	output := transpile(t, input)
+
+	// Should contain raw terminal mode setup
+	for _, want := range []string{
+		"term.IsTerminal",
+		"term.MakeRaw",
+		"term.Restore",
+		`"golang.org/x/term"`,
+		`"os/signal"`,
+		`"syscall"`,
+		"rawMode",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("expected %q in entry harness output, got:\n%s", want, output)
+		}
+	}
+}

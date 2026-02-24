@@ -20,6 +20,7 @@ type Generator struct {
 	needBufio    bool // track if we need bufio package import
 	needReflect    bool // track if we need reflect package import
 	needBoolHelper bool // track if we need _boolToInt helper
+	needTerm       bool // track if we need golang.org/x/term package import
 
 	// Track procedure signatures for proper pointer handling
 	procSigs map[string][]ast.ProcParam
@@ -105,6 +106,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.needBufio = false
 	g.needReflect = false
 	g.needBoolHelper = false
+	g.needTerm = false
 	g.procSigs = make(map[string][]ast.ProcParam)
 	g.refParams = make(map[string]bool)
 	g.protocolDefs = make(map[string]*ast.ProtocolDecl)
@@ -217,6 +219,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 			g.needOs = true
 			g.needSync = true
 			g.needBufio = true
+			g.needTerm = true
 		}
 	}
 
@@ -225,7 +228,7 @@ func (g *Generator) Generate(program *ast.Program) string {
 	g.writeLine("")
 
 	// Write imports
-	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits || g.needBufio || g.needReflect {
+	if g.needSync || g.needFmt || g.needTime || g.needOs || g.needMath || g.needMathBits || g.needBufio || g.needReflect || g.needTerm {
 		g.writeLine("import (")
 		g.indent++
 		if g.needBufio {
@@ -243,14 +246,24 @@ func (g *Generator) Generate(program *ast.Program) string {
 		if g.needOs {
 			g.writeLine(`"os"`)
 		}
+		if g.needTerm {
+			g.writeLine(`"os/signal"`)
+		}
 		if g.needReflect {
 			g.writeLine(`"reflect"`)
 		}
 		if g.needSync {
 			g.writeLine(`"sync"`)
 		}
+		if g.needTerm {
+			g.writeLine(`"syscall"`)
+		}
 		if g.needTime {
 			g.writeLine(`"time"`)
+		}
+		if g.needTerm {
+			g.writeLine("")
+			g.writeLine(`"golang.org/x/term"`)
 		}
 		g.indent--
 		g.writeLine(")")
@@ -415,7 +428,9 @@ func (g *Generator) findEntryProc(procDecls []ast.Statement) *ast.ProcDecl {
 }
 
 // generateEntryHarness emits a func main() that wires stdin/stdout/stderr
-// to channels and calls the entry PROC.
+// to channels and calls the entry PROC.  When stdin is a terminal, the
+// harness switches to raw mode (via golang.org/x/term) so that keyboard
+// input is available character-by-character without waiting for Enter.
 func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	name := goIdent(proc.Name)
 	g.writeLine("func main() {")
@@ -427,12 +442,41 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.writeLine("_error := make(chan byte, 256)")
 	g.writeLine("")
 
+	// Raw terminal mode setup
+	g.writeLine("// Raw terminal mode — gives character-at-a-time keyboard input")
+	g.writeLine("var rawMode bool")
+	g.writeLine("var oldState *term.State")
+	g.writeLine("fd := int(os.Stdin.Fd())")
+	g.writeLine("if term.IsTerminal(fd) {")
+	g.indent++
+	g.writeLine("var err error")
+	g.writeLine("oldState, err = term.MakeRaw(fd)")
+	g.writeLine("if err == nil {")
+	g.indent++
+	g.writeLine("rawMode = true")
+	g.writeLine("defer term.Restore(fd, oldState)")
+	g.writeLine("// Restore terminal on external signals")
+	g.writeLine("sigCh := make(chan os.Signal, 1)")
+	g.writeLine("signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)")
+	g.writeLine("go func() {")
+	g.indent++
+	g.writeLine("<-sigCh")
+	g.writeLine("term.Restore(fd, oldState)")
+	g.writeLine("os.Exit(1)")
+	g.indent--
+	g.writeLine("}()")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("")
+
 	// WaitGroup for writer goroutines to finish draining
 	g.writeLine("var wg sync.WaitGroup")
 	g.writeLine("wg.Add(2)")
 	g.writeLine("")
 
-	// Screen writer goroutine
+	// Screen writer goroutine — in raw mode, insert CR before LF
 	g.writeLine("go func() {")
 	g.indent++
 	g.writeLine("defer wg.Done()")
@@ -445,6 +489,9 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.indent--
 	g.writeLine("} else {")
 	g.indent++
+	g.writeLine(`if rawMode && b == '\n' {`)
+	g.writeLine(`w.WriteByte('\r')`)
+	g.writeLine("}")
 	g.writeLine("w.WriteByte(b)")
 	g.indent--
 	g.writeLine("}")
@@ -455,7 +502,7 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.writeLine("}()")
 	g.writeLine("")
 
-	// Error writer goroutine
+	// Error writer goroutine — same CR/LF handling
 	g.writeLine("go func() {")
 	g.indent++
 	g.writeLine("defer wg.Done()")
@@ -468,6 +515,9 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.indent--
 	g.writeLine("} else {")
 	g.indent++
+	g.writeLine(`if rawMode && b == '\n' {`)
+	g.writeLine(`w.WriteByte('\r')`)
+	g.writeLine("}")
 	g.writeLine("w.WriteByte(b)")
 	g.indent--
 	g.writeLine("}")
@@ -481,6 +531,30 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	// Keyboard reader goroutine
 	g.writeLine("go func() {")
 	g.indent++
+	g.writeLine("if rawMode {")
+	g.indent++
+	g.writeLine("buf := make([]byte, 1)")
+	g.writeLine("for {")
+	g.indent++
+	g.writeLine("n, err := os.Stdin.Read(buf)")
+	g.writeLine("if err != nil || n == 0 {")
+	g.indent++
+	g.writeLine("close(keyboard)")
+	g.writeLine("return")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("if buf[0] == 3 { // Ctrl+C")
+	g.indent++
+	g.writeLine("term.Restore(fd, oldState)")
+	g.writeLine("os.Exit(1)")
+	g.indent--
+	g.writeLine("}")
+	g.writeLine("keyboard <- buf[0]")
+	g.indent--
+	g.writeLine("}")
+	g.indent--
+	g.writeLine("} else {")
+	g.indent++
 	g.writeLine("r := bufio.NewReader(os.Stdin)")
 	g.writeLine("for {")
 	g.indent++
@@ -492,6 +566,8 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.indent--
 	g.writeLine("}")
 	g.writeLine("keyboard <- b")
+	g.indent--
+	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
 	g.indent--
