@@ -493,6 +493,11 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.writeLine(`w.WriteByte('\r')`)
 	g.writeLine("}")
 	g.writeLine("w.WriteByte(b)")
+	g.writeLine("if len(screen) == 0 {")
+	g.indent++
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
 	g.indent--
@@ -519,6 +524,11 @@ func (g *Generator) generateEntryHarness(proc *ast.ProcDecl) {
 	g.writeLine(`w.WriteByte('\r')`)
 	g.writeLine("}")
 	g.writeLine("w.WriteByte(b)")
+	g.writeLine("if len(_error) == 0 {")
+	g.indent++
+	g.writeLine("w.Flush()")
+	g.indent--
+	g.writeLine("}")
 	g.indent--
 	g.writeLine("}")
 	g.indent--
@@ -1962,6 +1972,15 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 		}
 	}
 
+	// Detect guarded SKIP case — needs dual-select pattern to avoid busy-wait
+	guardedSkipIdx := -1
+	for i, c := range alt.Cases {
+		if c.IsSkip && c.Guard != nil {
+			guardedSkipIdx = i
+			break
+		}
+	}
+
 	if hasGuards {
 		// Generate channel variables for guarded cases
 		for i, c := range alt.Cases {
@@ -1981,55 +2000,99 @@ func (g *Generator) generateAltBlock(alt *ast.AltBlock) {
 		}
 	}
 
-	g.writeLine("select {")
-	for i, c := range alt.Cases {
+	if guardedSkipIdx >= 0 {
+		// Dual-select pattern: when guard is true, use default (non-blocking);
+		// when guard is false, omit default (blocking on channels).
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
-		if c.IsSkip {
-			g.write("default:\n")
-		} else if c.IsTimer {
-			g.write("case <-time.After(time.Duration(")
-			g.generateExpression(c.Deadline)
-			g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
-		} else if c.Guard != nil {
-			varRef := goIdent(c.Variable)
-			if len(c.VariableIndices) > 0 {
-				varRef += g.generateIndicesStr(c.VariableIndices)
-			}
-			g.write(fmt.Sprintf("case %s = <-_alt%d:\n", varRef, i))
-		} else if len(c.ChannelIndices) > 0 {
-			varRef := goIdent(c.Variable)
-			if len(c.VariableIndices) > 0 {
-				varRef += g.generateIndicesStr(c.VariableIndices)
-			}
-			g.write(fmt.Sprintf("case %s = <-%s", varRef, goIdent(c.Channel)))
-			g.generateIndices(c.ChannelIndices)
-			g.write(":\n")
-		} else {
-			varRef := goIdent(c.Variable)
-			if len(c.VariableIndices) > 0 {
-				varRef += g.generateIndicesStr(c.VariableIndices)
-			}
-			g.write(fmt.Sprintf("case %s = <-%s:\n", varRef, goIdent(c.Channel)))
-		}
+		g.write("_altSkipReady := ")
+		g.generateExpression(alt.Cases[guardedSkipIdx].Guard)
+		g.write("\n")
+
+		// if _altSkipReady { select with default }
+		g.writeLine("if _altSkipReady {")
 		g.indent++
-		guardedSkip := c.IsSkip && c.Guard != nil
-		if guardedSkip {
-			g.builder.WriteString(strings.Repeat("\t", g.indent))
-			g.write("if ")
-			g.generateExpression(c.Guard)
-			g.write(" {\n")
-			g.indent++
+		g.writeLine("select {")
+		for i, c := range alt.Cases {
+			if c.IsSkip {
+				g.builder.WriteString(strings.Repeat("\t", g.indent))
+				g.write("default:\n")
+				g.indent++
+				for _, s := range c.Body {
+					g.generateStatement(s)
+				}
+				g.indent--
+			} else {
+				g.generateAltChannelCase(i, c)
+			}
 		}
-		for _, s := range c.Body {
-			g.generateStatement(s)
-		}
-		if guardedSkip {
-			g.indent--
-			g.writeLine("}")
-		}
+		g.writeLine("}")
 		g.indent--
+
+		// else { select without default — blocks on channels }
+		g.writeLine("} else {")
+		g.indent++
+		g.writeLine("select {")
+		for i, c := range alt.Cases {
+			if !c.IsSkip {
+				g.generateAltChannelCase(i, c)
+			}
+		}
+		g.writeLine("}")
+		g.indent--
+		g.writeLine("}")
+	} else {
+		// Standard single-select pattern
+		g.writeLine("select {")
+		for i, c := range alt.Cases {
+			if c.IsSkip {
+				g.builder.WriteString(strings.Repeat("\t", g.indent))
+				g.write("default:\n")
+				g.indent++
+				for _, s := range c.Body {
+					g.generateStatement(s)
+				}
+				g.indent--
+			} else {
+				g.generateAltChannelCase(i, c)
+			}
+		}
+		g.writeLine("}")
 	}
-	g.writeLine("}")
+}
+
+// generateAltChannelCase generates a single channel or timer case for a select block.
+func (g *Generator) generateAltChannelCase(i int, c ast.AltCase) {
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	if c.IsTimer {
+		g.write("case <-time.After(time.Duration(")
+		g.generateExpression(c.Deadline)
+		g.write(" - int(time.Now().UnixMicro())) * time.Microsecond):\n")
+	} else if c.Guard != nil {
+		varRef := goIdent(c.Variable)
+		if len(c.VariableIndices) > 0 {
+			varRef += g.generateIndicesStr(c.VariableIndices)
+		}
+		g.write(fmt.Sprintf("case %s = <-_alt%d:\n", varRef, i))
+	} else if len(c.ChannelIndices) > 0 {
+		varRef := goIdent(c.Variable)
+		if len(c.VariableIndices) > 0 {
+			varRef += g.generateIndicesStr(c.VariableIndices)
+		}
+		g.write(fmt.Sprintf("case %s = <-%s", varRef, goIdent(c.Channel)))
+		g.generateIndices(c.ChannelIndices)
+		g.write(":\n")
+	} else {
+		varRef := goIdent(c.Variable)
+		if len(c.VariableIndices) > 0 {
+			varRef += g.generateIndicesStr(c.VariableIndices)
+		}
+		g.write(fmt.Sprintf("case %s = <-%s:\n", varRef, goIdent(c.Channel)))
+	}
+	g.indent++
+	for _, s := range c.Body {
+		g.generateStatement(s)
+	}
+	g.indent--
 }
 
 func (g *Generator) generateReplicatedAlt(alt *ast.AltBlock) {

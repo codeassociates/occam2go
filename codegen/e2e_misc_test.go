@@ -286,6 +286,38 @@ func TestE2E_AltGuardedSkipFalse(t *testing.T) {
 	}
 }
 
+func TestE2E_AltGuardedSkipFalseBlocking(t *testing.T) {
+	// Verify that when the SKIP guard is false, the ALT blocks on channels
+	// (not busy-waiting via default). The sender goes through a relay channel
+	// to introduce a delay, proving the ALT blocks until data arrives.
+	occam := `SEQ
+  CHAN OF INT relay:
+  CHAN OF INT c:
+  INT result:
+  BOOL ready:
+  ready := FALSE
+  result := 0
+  PAR
+    SEQ
+      ALT
+        ready & SKIP
+          result := 99
+        c ? result
+          SKIP
+    SEQ
+      INT tmp:
+      relay ? tmp
+      c ! tmp
+    relay ! 55
+  print.int(result)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "55\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_MultiLineAbbreviation(t *testing.T) {
 	// Issue #79: IS at end of line as continuation
 	occam := `SEQ
