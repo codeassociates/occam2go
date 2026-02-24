@@ -95,27 +95,27 @@ func main() {
 
 ## Codebase Size
 
-~16,200 lines of code (excluding the vendored `kroc/` subtree).
+~19,800 lines of code (excluding the vendored `kroc/` subtree).
 
 | Category | Lines |
 |----------|------:|
-| Production code | 7,300 |
-| Tests | 8,800 |
-| Occam examples | 135 |
-| **Total** | **~16,200** |
+| Production code | 8,300 |
+| Tests | 11,000 |
+| Occam examples | 590 |
+| **Total** | **~19,800** |
 
 Largest files:
 
 | File | Lines |
 |------|------:|
-| `parser/parser_test.go` | 3,124 |
-| `parser/parser.go` | 2,811 |
-| `codegen/codegen.go` | 2,617 |
-| `codegen/codegen_test.go` | 669 |
-| `ast/ast.go` | 520 |
-| `lexer/lexer.go` | 448 |
-| `preproc/preproc_test.go` | 437 |
-| E2E test files (18 files) | 3,826 |
+| `parser/parser_test.go` | 3,980 |
+| `codegen/codegen.go` | 3,361 |
+| `parser/parser.go` | 2,977 |
+| `codegen/codegen_test.go` | 880 |
+| `preproc/preproc_test.go` | 529 |
+| `ast/ast.go` | 529 |
+| `lexer/lexer.go` | 449 |
+| E2E test files (19 files) | 4,803 |
 
 ## Implemented Features
 
