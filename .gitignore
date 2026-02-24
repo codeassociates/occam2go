@@ -31,5 +31,8 @@ Thumbs.db
 # Generated Go files from examples
 examples/*.go
 
+# Generated occam files from fetch scripts
+historical-examples/life.occ
+
 # External repositories
 kroc/
