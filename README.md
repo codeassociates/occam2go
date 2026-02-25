@@ -5,7 +5,8 @@ My goal as the human in this endevour was to see if I could refute posts I saw a
 "well that's easy because there's many C compilers in the training data". I had the idea: Occam is so old that there's basically nothing about it on the modern internet.
 I had also had a long standing curiosity about the connection between Occam and go(lang) that made be curious as to whether you could build an Occam to golang transpiler.
 This project is the result: scratching two itches -- can an LLM create a working compiler for a language that doesn't show up in its training data, and can one transpile Occam to Go.
-Without Claude I'd never have the time to scratch that second itch. And...over to Claude:
+Without Claude I'd never have the time to scratch that second itch. For the curious there is [an article](https://codeassociates.github.io/conversations-with-claude/conversations/occam-transpiler/index.html) with more background and the LLM chat sessions used to create the project.
+And now...over to Claude:
 
 # occam2go
 
