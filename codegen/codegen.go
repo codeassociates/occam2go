@@ -296,16 +296,18 @@ func (g *Generator) Generate(program *ast.Program) string {
 			g.write("\n")
 		} else {
 			goType := g.occamTypeToGo(abbr.Type)
-			if abbr.IsOpenArray || abbr.IsFixedArray {
-				goType = "[]" + goType
+			if abbr.OpenArrayDims > 0 {
+				goType = strings.Repeat("[]", abbr.OpenArrayDims) + goType
 			}
 			g.builder.WriteString("var ")
 			g.write(fmt.Sprintf("%s %s = ", goIdent(abbr.Name), goType))
 			// Wrap string literals with []byte() when assigned to []byte variables
-			if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.IsOpenArray && abbr.Type == "BYTE" {
+			if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.OpenArrayDims > 0 && abbr.Type == "BYTE" {
 				g.write("[]byte(")
 				g.generateExpression(abbr.Value)
 				g.write(")")
+			} else if al, isArr := abbr.Value.(*ast.ArrayLiteral); isArr && abbr.OpenArrayDims > 1 {
+				g.generateTypedArrayLiteral(al, goType)
 			} else {
 				g.generateExpression(abbr.Value)
 			}
@@ -1198,18 +1200,20 @@ func (g *Generator) generateAbbreviation(abbr *ast.Abbreviation) {
 	g.builder.WriteString(strings.Repeat("\t", g.indent))
 	if abbr.Type != "" {
 		goType := g.occamTypeToGo(abbr.Type)
-		if abbr.IsOpenArray || abbr.IsFixedArray {
-			goType = "[]" + goType
+		if abbr.OpenArrayDims > 0 {
+			goType = strings.Repeat("[]", abbr.OpenArrayDims) + goType
 		}
 		g.write(fmt.Sprintf("var %s %s = ", goIdent(abbr.Name), goType))
 	} else {
 		g.write(fmt.Sprintf("%s := ", goIdent(abbr.Name)))
 	}
 	// Wrap string literals with []byte() when assigned to []byte variables
-	if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.IsOpenArray && abbr.Type == "BYTE" {
+	if _, isStr := abbr.Value.(*ast.StringLiteral); isStr && abbr.OpenArrayDims > 0 && abbr.Type == "BYTE" {
 		g.write("[]byte(")
 		g.generateExpression(abbr.Value)
 		g.write(")")
+	} else if al, isArr := abbr.Value.(*ast.ArrayLiteral); isArr && abbr.OpenArrayDims > 1 {
+		g.generateTypedArrayLiteral(al, strings.Repeat("[]", abbr.OpenArrayDims)+g.occamTypeToGo(abbr.Type))
 	} else {
 		g.generateExpression(abbr.Value)
 	}
@@ -2945,6 +2949,32 @@ func (g *Generator) generateArrayLiteral(al *ast.ArrayLiteral) {
 			g.write(", ")
 		}
 		g.generateExpression(elem)
+	}
+	g.write("}")
+}
+
+// generateTypedArrayLiteral emits a typed Go slice literal with the given Go type.
+// For nested arrays (e.g. [][]int), inner array literals use bare {e1, e2} syntax
+// (Go composite literal elision).
+func (g *Generator) generateTypedArrayLiteral(al *ast.ArrayLiteral, goType string) {
+	g.write(goType + "{")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if innerArr, ok := elem.(*ast.ArrayLiteral); ok {
+			// Inner array: use bare composite literal {e1, e2, ...}
+			g.write("{")
+			for j, inner := range innerArr.Elements {
+				if j > 0 {
+					g.write(", ")
+				}
+				g.generateExpression(inner)
+			}
+			g.write("}")
+		} else {
+			g.generateExpression(elem)
+		}
 	}
 	g.write("}")
 }

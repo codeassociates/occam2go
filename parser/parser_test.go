@@ -3978,3 +3978,83 @@ func TestIndexedChannelReceiveIndexedVariable(t *testing.T) {
 		t.Fatalf("expected 1 variable index, got %d", len(recv.VariableIndices))
 	}
 }
+
+func TestMixedDimAbbreviation(t *testing.T) {
+	input := `VAL [][2]BYTE x IS [[1, 2]]:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+	if abbr.OpenArrayDims != 2 {
+		t.Errorf("expected OpenArrayDims=2, got %d", abbr.OpenArrayDims)
+	}
+	if abbr.Type != "BYTE" {
+		t.Errorf("expected type BYTE, got %s", abbr.Type)
+	}
+}
+
+func TestMultiDimOpenAbbreviation(t *testing.T) {
+	input := `VAL [][]INT x IS [[1, 2]]:
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	abbr, ok := program.Statements[0].(*ast.Abbreviation)
+	if !ok {
+		t.Fatalf("expected Abbreviation, got %T", program.Statements[0])
+	}
+	if abbr.OpenArrayDims != 2 {
+		t.Errorf("expected OpenArrayDims=2, got %d", abbr.OpenArrayDims)
+	}
+	if abbr.Type != "INT" {
+		t.Errorf("expected type INT, got %s", abbr.Type)
+	}
+}
+
+func TestMixedDimProcParam(t *testing.T) {
+	input := `PROC f(VAL [][2]BYTE cfg)
+  SKIP
+`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+
+	proc, ok := program.Statements[0].(*ast.ProcDecl)
+	if !ok {
+		t.Fatalf("expected ProcDecl, got %T", program.Statements[0])
+	}
+	if len(proc.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(proc.Params))
+	}
+	p0 := proc.Params[0]
+	if p0.OpenArrayDims != 2 {
+		t.Errorf("expected OpenArrayDims=2, got %d", p0.OpenArrayDims)
+	}
+	if p0.Type != "BYTE" {
+		t.Errorf("expected type BYTE, got %s", p0.Type)
+	}
+	if !p0.IsVal {
+		t.Error("expected IsVal to be true")
+	}
+}
