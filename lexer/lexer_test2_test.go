@@ -161,6 +161,20 @@ func TestStringEscapeSequences(t *testing.T) {
 	}
 }
 
+func TestStringEscapeQuote(t *testing.T) {
+	// *" inside a string should not terminate the string
+	input := `"He said *"hello*""` + "\n"
+	l := New(input)
+	tok := l.NextToken()
+	if tok.Type != STRING {
+		t.Fatalf("expected STRING, got %q", tok.Type)
+	}
+	expected := `He said *"hello*"`
+	if tok.Literal != expected {
+		t.Fatalf("expected literal %q, got %q", expected, tok.Literal)
+	}
+}
+
 func TestByteLiteralToken(t *testing.T) {
 	input := "'A'\n"
 	l := New(input)
