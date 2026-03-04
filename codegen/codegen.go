@@ -745,7 +745,7 @@ func (g *Generator) containsPrint(stmt ast.Statement) bool {
 
 func (g *Generator) containsTimer(stmt ast.Statement) bool {
 	switch s := stmt.(type) {
-	case *ast.TimerDecl, *ast.TimerRead:
+	case *ast.TimerDecl, *ast.TimerRead, *ast.TimerAfterWait:
 		return true
 	case *ast.AltBlock:
 		for _, c := range s.Cases {
@@ -1135,6 +1135,8 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateSend(s)
 	case *ast.Receive:
 		g.generateReceive(s)
+	case *ast.TimerAfterWait:
+		g.generateTimerAfterWait(s)
 	case *ast.SeqBlock:
 		g.generateSeqBlock(s)
 	case *ast.ParBlock:
@@ -1429,6 +1431,14 @@ func (g *Generator) generateSend(send *ast.Send) {
 		g.generateExpression(send.Value)
 	}
 	g.write("\n")
+}
+
+func (g *Generator) generateTimerAfterWait(s *ast.TimerAfterWait) {
+	// tim ? AFTER deadline  →  time.Sleep(time.Duration(deadline - time.Now().UnixMicro()) * time.Microsecond)
+	g.builder.WriteString(strings.Repeat("\t", g.indent))
+	g.write("time.Sleep(time.Duration(")
+	g.generateExpression(s.Deadline)
+	g.write(" - int(time.Now().UnixMicro())) * time.Microsecond)\n")
 }
 
 func (g *Generator) generateReceive(recv *ast.Receive) {

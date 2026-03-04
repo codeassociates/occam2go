@@ -383,6 +383,16 @@ type Receive struct {
 func (r *Receive) statementNode()       {}
 func (r *Receive) TokenLiteral() string { return r.Token.Literal }
 
+// TimerAfterWait represents a standalone timer AFTER wait: tim ? AFTER expr
+type TimerAfterWait struct {
+	Token    lexer.Token // the ? token
+	Timer    string      // timer variable name
+	Deadline Expression  // the deadline expression
+}
+
+func (t *TimerAfterWait) statementNode()       {}
+func (t *TimerAfterWait) TokenLiteral() string { return t.Token.Literal }
+
 // AltBlock represents an ALT block (alternation/select)
 // If Replicator is non-nil, this is a replicated ALT (ALT i = 0 FOR n)
 type AltBlock struct {

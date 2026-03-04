@@ -1207,13 +1207,28 @@ func (p *Parser) parseTimerDecl() *ast.TimerDecl {
 	return decl
 }
 
-func (p *Parser) parseTimerRead() *ast.TimerRead {
-	stmt := &ast.TimerRead{
-		Timer: p.curToken.Literal,
-	}
+func (p *Parser) parseTimerRead() ast.Statement {
+	timerName := p.curToken.Literal
 
 	p.nextToken() // move to ?
-	stmt.Token = p.curToken
+	recvToken := p.curToken
+
+	// Check for timer AFTER wait: tim ? AFTER expr
+	if p.peekTokenIs(lexer.AFTER) {
+		p.nextToken() // move to AFTER
+		p.nextToken() // move past AFTER to deadline expression
+		deadline := p.parseExpression(LOWEST)
+		return &ast.TimerAfterWait{
+			Token:    recvToken,
+			Timer:    timerName,
+			Deadline: deadline,
+		}
+	}
+
+	stmt := &ast.TimerRead{
+		Timer: timerName,
+	}
+	stmt.Token = recvToken
 
 	if !p.expectPeek(lexer.IDENT) {
 		return nil

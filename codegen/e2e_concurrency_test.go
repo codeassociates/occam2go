@@ -181,6 +181,22 @@ func TestE2E_TimerAltTimeout(t *testing.T) {
 	}
 }
 
+func TestE2E_TimerAfterWait(t *testing.T) {
+	// Test standalone tim ? AFTER expr (non-ALT timer wait)
+	occam := `SEQ
+  TIMER tim:
+  INT t:
+  tim ? t
+  tim ? AFTER (t + 1000)
+  print.int(42)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "42\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_ChanParam(t *testing.T) {
 	occam := `PROC sender(CHAN OF INT output)
   output ! 42
