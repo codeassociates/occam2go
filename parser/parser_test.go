@@ -2386,6 +2386,44 @@ func TestSizeExpression(t *testing.T) {
 	}
 }
 
+func TestSizeExpressionWithDirection(t *testing.T) {
+	tests := []struct {
+		input string
+		dir   string
+	}{
+		{`x := SIZE monitor?` + "\n", "?"},
+		{`x := SIZE out!` + "\n", "!"},
+	}
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("input %q: expected 1 statement, got %d", tt.input, len(program.Statements))
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Fatalf("input %q: expected Assignment, got %T", tt.input, program.Statements[0])
+		}
+
+		sizeExpr, ok := assign.Value.(*ast.SizeExpr)
+		if !ok {
+			t.Fatalf("input %q: expected SizeExpr, got %T", tt.input, assign.Value)
+		}
+
+		ident, ok := sizeExpr.Expr.(*ast.Identifier)
+		if !ok {
+			t.Fatalf("input %q: expected Identifier inside SizeExpr, got %T", tt.input, sizeExpr.Expr)
+		}
+		if ident.Value != "monitor" && ident.Value != "out" {
+			t.Errorf("input %q: unexpected identifier %s", tt.input, ident.Value)
+		}
+	}
+}
+
 func TestSizeExpressionInBinaryExpr(t *testing.T) {
 	// SIZE has PREFIX precedence, so "SIZE arr + 1" parses as "(SIZE arr) + 1"
 	input := `x := SIZE arr + 1

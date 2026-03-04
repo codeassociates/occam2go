@@ -2925,6 +2925,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 			Token: token,
 			Expr:  p.parseExpression(PREFIX),
 		}
+		// Strip trailing direction annotation (e.g., SIZE monitor?)
+		if p.peekTokenIs(lexer.SEND) || p.peekTokenIs(lexer.RECEIVE) {
+			p.nextToken()
+		}
 	case lexer.MOSTNEG_KW, lexer.MOSTPOS_KW:
 		token := p.curToken
 		isNeg := token.Type == lexer.MOSTNEG_KW
