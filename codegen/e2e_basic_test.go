@@ -146,3 +146,27 @@ func TestE2E_InitialDecl(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_VarRedeclInSiblingSeqs(t *testing.T) {
+	// Variable 'x' is declared in two separate SEQ blocks within the same
+	// parent SEQ. Without scoping braces, Go reports "x redeclared in this block".
+	occam := `SEQ
+  SEQ
+    INT x:
+    x := 10
+    print.int(x)
+  SEQ
+    INT x:
+    x := 20
+    print.int(x)
+  SEQ
+    INT x:
+    x := 30
+    print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n20\n30\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
