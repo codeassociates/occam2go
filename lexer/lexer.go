@@ -303,9 +303,21 @@ func (l *Lexer) readHexNumber() string {
 
 func (l *Lexer) readString() string {
 	position := l.position + 1
+	escaped := false
 	for {
 		l.readChar()
-		if l.ch == '"' || l.ch == 0 {
+		if l.ch == 0 {
+			break
+		}
+		if escaped {
+			escaped = false
+			continue
+		}
+		if l.ch == '*' {
+			escaped = true
+			continue
+		}
+		if l.ch == '"' {
 			break
 		}
 	}

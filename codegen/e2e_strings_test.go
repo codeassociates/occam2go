@@ -65,3 +65,15 @@ func TestE2E_StringWithEscapes(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_StringWithEscapedQuote(t *testing.T) {
+	// *" inside a string literal should produce a literal double-quote
+	occam := `SEQ
+  print.string("He said *"hello*"")
+`
+	output := transpileCompileRun(t, occam)
+	expected := "He said \"hello\"\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
