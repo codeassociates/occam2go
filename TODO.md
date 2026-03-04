@@ -16,7 +16,7 @@
 ### Data Types & Declarations
 - **INT, INT16, INT32, INT64, BYTE, BOOL, REAL, REAL32, REAL64** — Scalar types (INT16/32/64 map to int16/32/64, REAL/REAL64 map to float64, REAL32 maps to float32)
 - **Variable declarations** — `INT x, y, z:`
-- **Arrays** — `[n]TYPE arr:` with index expressions; multi-dimensional `[n][m]TYPE` with nested init loops
+- **Arrays** — `[n]TYPE arr:` with index expressions; multi-dimensional `[n][m]TYPE` with nested init loops; mixed-dimension abbreviations `[][n]TYPE` and `[][]TYPE`
 - **Channels** — `CHAN OF TYPE c:` with send (`!`) and receive (`?`); `CHAN BYTE` shorthand (without `OF`)
 - **Channel arrays** — `[n]CHAN OF TYPE cs:` with indexed send/receive; multi-dimensional `[n][m]CHAN OF TYPE` with nested init loops; `[]CHAN`, `[][]CHAN`, etc. proc params
 - **Channel direction** — `CHAN OF INT c?` (receive-only) and `CHAN OF INT c!` (send-only); direction annotations at call sites (`out!`, `in?`) accepted and ignored

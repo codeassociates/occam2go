@@ -405,3 +405,54 @@ SEQ
 		t.Errorf("expected %q, got %q", expected, output)
 	}
 }
+
+func TestE2E_MixedDimAbbreviation(t *testing.T) {
+	// [][2]INT abbreviation with nested array literals
+	occam := `SEQ
+  VAL [][2]INT pairs IS [[10, 20], [30, 40]]:
+  print.int(pairs[0][0])
+  print.int(pairs[0][1])
+  print.int(pairs[1][0])
+  print.int(pairs[1][1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n20\n30\n40\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MixedDimProcParam(t *testing.T) {
+	// PROC with [][2]INT parameter
+	occam := `PROC print.pairs(VAL [][2]INT pairs)
+  SEQ i = 0 FOR SIZE pairs
+    SEQ
+      print.int(pairs[i][0])
+      print.int(pairs[i][1])
+:
+SEQ
+  VAL [][2]INT data IS [[10, 20], [30, 40], [50, 60]]:
+  print.pairs(data)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "10\n20\n30\n40\n50\n60\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
+func TestE2E_MultiDimOpenAbbreviation(t *testing.T) {
+	// [][]INT abbreviation
+	occam := `SEQ
+  VAL [][]INT matrix IS [[1, 2], [3, 4]]:
+  print.int(matrix[0][0])
+  print.int(matrix[0][1])
+  print.int(matrix[1][0])
+  print.int(matrix[1][1])
+`
+	output := transpileCompileRun(t, occam)
+	expected := "1\n2\n3\n4\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}

@@ -327,31 +327,33 @@ func (p *Parser) parseAbbreviation() ast.Statement {
 
 	p.nextToken()
 
-	// Check for []TYPE (open array abbreviation)
-	isOpenArray := false
-	if p.curTokenIs(lexer.LBRACKET) && p.peekTokenIs(lexer.RBRACKET) {
-		isOpenArray = true
-		p.nextToken() // consume ]
-		p.nextToken() // move to type
-	}
-
-	// Check for [n]TYPE (fixed-size array, used in RETYPES)
-	isArray := false
+	// Count bracket dimensions: [] (open) and [n] (fixed) in any combination
+	// e.g. []BYTE = 1 dim, [][2]BYTE = 2 dims, [][]INT = 2 dims, [8]INT = 1 dim (fixed, for RETYPES)
+	dims := 0
+	isFixedArray := false
 	var arraySize ast.Expression
-	if !isOpenArray && p.curTokenIs(lexer.LBRACKET) {
-		// Could be [n]TYPE name RETYPES ...
-		isArray = true
-		p.nextToken() // move past [
-		arraySize = p.parseExpression(LOWEST)
-		if !p.expectPeek(lexer.RBRACKET) {
-			return nil
+	for p.curTokenIs(lexer.LBRACKET) {
+		if p.peekTokenIs(lexer.RBRACKET) {
+			// Open dimension: []
+			dims++
+			p.nextToken() // consume ]
+			p.nextToken() // past ]
+		} else {
+			// Fixed dimension: [n]
+			dims++
+			isFixedArray = true
+			p.nextToken() // past [
+			arraySize = p.parseExpression(LOWEST)
+			if !p.expectPeek(lexer.RBRACKET) {
+				return nil
+			}
+			p.nextToken() // past ]
 		}
-		p.nextToken() // move to type
 	}
 
 	// Check for untyped VAL abbreviation: VAL name IS expr :
 	// Detect: curToken is IDENT and peekToken is IS (no type keyword)
-	if !isOpenArray && !isArray && p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.IS) {
+	if dims == 0 && p.curTokenIs(lexer.IDENT) && p.peekTokenIs(lexer.IS) {
 		name := p.curToken.Literal
 		p.nextToken() // consume IS
 		p.nextToken() // move to expression
@@ -395,7 +397,7 @@ func (p *Parser) parseAbbreviation() ast.Statement {
 			Token:      token,
 			IsVal:      true,
 			TargetType: typeName,
-			IsArray:    isArray,
+			IsArray:    isFixedArray,
 			ArraySize:  arraySize,
 			Name:       name,
 			Source:      source,
@@ -417,13 +419,12 @@ func (p *Parser) parseAbbreviation() ast.Statement {
 	}
 
 	return &ast.Abbreviation{
-		Token:        token,
-		IsVal:        true,
-		IsOpenArray:  isOpenArray,
-		IsFixedArray: isArray,
-		Type:         typeName,
-		Name:         name,
-		Value:        value,
+		Token:         token,
+		IsVal:         true,
+		OpenArrayDims: dims,
+		Type:          typeName,
+		Name:          name,
+		Value:         value,
 	}
 }
 
@@ -2150,7 +2151,8 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 			p.nextToken()
 		}
 
-		// Check for []...CHAN OF <type>, []...TYPE (open array), or [n]TYPE (fixed-size array)
+		// Check for []...CHAN OF <type>, []...TYPE (open array), [n]TYPE (fixed-size array),
+		// or mixed [][n]TYPE (open+fixed dimensions)
 		if p.curTokenIs(lexer.LBRACKET) {
 			if p.peekTokenIs(lexer.RBRACKET) {
 				// Open array: [][]...CHAN OF TYPE or [][]...TYPE
@@ -2160,6 +2162,16 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 					dims++
 					p.nextToken() // consume ]
 					p.nextToken() // move past ]
+				}
+				// After open [] pairs, check for trailing [n] fixed dims (e.g. [][2]TYPE)
+				for p.curTokenIs(lexer.LBRACKET) && !p.peekTokenIs(lexer.RBRACKET) {
+					dims++
+					p.nextToken() // past [
+					// skip size expression tokens until ]
+					for !p.curTokenIs(lexer.RBRACKET) && !p.curTokenIs(lexer.EOF) {
+						p.nextToken()
+					}
+					p.nextToken() // past ]
 				}
 				if p.curTokenIs(lexer.CHAN) {
 					// []...CHAN OF <type> or []...CHAN <type> (channel array parameter)
@@ -2189,7 +2201,8 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 					return params
 				}
 			} else {
-				// Fixed-size array: [n]TYPE
+				// Fixed-size array: [n]TYPE — mapped to open array (slice) param
+				dims := 1
 				p.nextToken() // move past [
 				if !p.curTokenIs(lexer.INT) {
 					p.addError(fmt.Sprintf("expected array size, got %s", p.curToken.Type))
@@ -2199,7 +2212,17 @@ func (p *Parser) parseProcParams() []ast.ProcParam {
 				if !p.expectPeek(lexer.RBRACKET) {
 					return params
 				}
-				p.nextToken() // move to type
+				p.nextToken() // move past ]
+				// Check for additional [n] dims after the first (e.g. [3][4]TYPE)
+				for p.curTokenIs(lexer.LBRACKET) && !p.peekTokenIs(lexer.RBRACKET) {
+					dims++
+					p.nextToken() // past [
+					for !p.curTokenIs(lexer.RBRACKET) && !p.curTokenIs(lexer.EOF) {
+						p.nextToken()
+					}
+					p.nextToken() // past ]
+				}
+				_ = dims // ArraySize already set; dims only relevant for open arrays
 				if isTypeToken(p.curToken.Type) {
 					param.Type = p.curToken.Literal
 				} else if p.curTokenIs(lexer.IDENT) && p.recordNames[p.curToken.Literal] {
