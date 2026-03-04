@@ -154,6 +154,27 @@ func TestE2E_SizeArray(t *testing.T) {
 	}
 }
 
+func TestE2E_SizeDirAnnotated(t *testing.T) {
+	occam := `PROC bar([]CHAN OF INT out!)
+  SEQ i = 0 FOR SIZE out!
+    out[i] ! i
+SEQ
+  [3]CHAN OF INT cs:
+  PAR
+    bar(cs)
+    SEQ
+      INT x:
+      SEQ i = 0 FOR 3
+        cs[i] ? x
+        print.int(x)
+`
+	output := transpileCompileRun(t, occam)
+	expected := "0\n1\n2\n"
+	if output != expected {
+		t.Errorf("expected %q, got %q", expected, output)
+	}
+}
+
 func TestE2E_SizeString(t *testing.T) {
 	occam := `SEQ
   INT n:
