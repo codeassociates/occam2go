@@ -1878,16 +1878,12 @@ func (g *Generator) generateSeqBlock(seq *ast.SeqBlock) {
 			g.write(fmt.Sprintf("; %s++ {\n", v))
 			g.indent++
 		}
-		for _, stmt := range seq.Statements {
-			g.generateStatement(stmt)
-		}
+		g.generateStatementsWithScoping(seq.Statements)
 		g.indent--
 		g.writeLine("}")
 	} else {
 		// SEQ just becomes sequential Go code (Go's default)
-		for _, stmt := range seq.Statements {
-			g.generateStatement(stmt)
-		}
+		g.generateStatementsWithScoping(seq.Statements)
 	}
 }
 
@@ -2306,9 +2302,7 @@ func (g *Generator) generateProcDecl(proc *ast.ProcDecl) {
 	oldSigs := make(map[string][]ast.ProcParam)
 	g.collectNestedProcSigsScoped(proc.Body, oldSigs)
 
-	for _, stmt := range proc.Body {
-		g.generateStatement(stmt)
-	}
+	g.generateStatementsWithScoping(proc.Body)
 
 	// Restore overwritten signatures
 	for name, params := range oldSigs {
@@ -2455,9 +2449,7 @@ func (g *Generator) generateFuncDecl(fn *ast.FuncDecl) {
 	g.indent++
 	g.nestingLevel++
 
-	for _, stmt := range fn.Body {
-		g.generateStatement(stmt)
-	}
+	g.generateStatementsWithScoping(fn.Body)
 
 	if len(fn.ResultExprs) > 0 {
 		g.builder.WriteString(strings.Repeat("\t", g.indent))
@@ -3388,4 +3380,72 @@ func (g *Generator) emitIntrinsicHelpers() {
 	g.writeLine("\treturn int(int32(uint32(v >> 32))), int(int32(uint32(v)))")
 	g.writeLine("}")
 	g.writeLine("")
+}
+
+// declaredNames returns the variable names introduced by a declaration statement.
+// For non-replicated SEQ blocks (which are transparent in Go — no { } scope),
+// it recursively collects names from child statements so that the parent scope
+// can detect cross-block redeclarations.
+func declaredNames(stmt ast.Statement) []string {
+	switch s := stmt.(type) {
+	case *ast.VarDecl:
+		return s.Names
+	case *ast.ArrayDecl:
+		return s.Names
+	case *ast.ChanDecl:
+		return s.Names
+	case *ast.TimerDecl:
+		return s.Names
+	case *ast.Abbreviation:
+		return []string{s.Name}
+	case *ast.RetypesDecl:
+		return []string{s.Name}
+	case *ast.SeqBlock:
+		if s.Replicator == nil {
+			var names []string
+			for _, child := range s.Statements {
+				names = append(names, declaredNames(child)...)
+			}
+			return names
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+// generateStatementsWithScoping emits statements, opening new Go { } scope
+// blocks when a variable name is redeclared. This mirrors occam's scoping
+// where each declaration starts a new scope that extends to the end of its
+// enclosing block.
+func (g *Generator) generateStatementsWithScoping(stmts []ast.Statement) {
+	declared := make(map[string]bool)
+	bracesOpened := 0
+
+	for _, stmt := range stmts {
+		names := declaredNames(stmt)
+		needScope := false
+		for _, n := range names {
+			if declared[n] {
+				needScope = true
+				break
+			}
+		}
+		if needScope {
+			g.writeLine("{")
+			g.indent++
+			bracesOpened++
+			declared = make(map[string]bool)
+		}
+		for _, n := range names {
+			declared[n] = true
+		}
+		g.generateStatement(stmt)
+	}
+
+	for bracesOpened > 0 {
+		g.indent--
+		g.writeLine("}")
+		bracesOpened--
+	}
 }
